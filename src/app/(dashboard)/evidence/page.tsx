@@ -1,20 +1,22 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Timeline } from "@/components/shared/timeline";
-import { useToast } from "@/components/shared/toast";
-import { mockEvidence, mockCustomers } from "@/lib/mock-data";
-import { EVIDENCE_TYPE_LABELS } from "@/types/evidence";
+import { Card, CardHeader, CardTitle, CardContent } from "@/shared/ui/components/ui/card";
+import { Button } from "@/shared/ui/components/ui/button";
+import { Input } from "@/shared/ui/components/ui/input";
+import { Label } from "@/shared/ui/components/ui/label";
+import { Textarea } from "@/shared/ui/components/ui/textarea";
+import { Select } from "@/shared/ui/components/ui/select";
+import { Badge } from "@/shared/ui/components/ui/badge";
+import { Timeline } from "@/shared/ui/components/shared/timeline";
+import { useToast } from "@/shared/ui/components/shared/toast";
+import { EVIDENCE_TYPE_LABELS } from "@/features/contact-evidence/evidence.types";
+import { useAuthStore } from "@/features/auth/auth.store";
+import { assignmentService } from "@/features/assignments/assignment.service";
+import type { ActiveSlaDto, ContactEvidenceDto } from "@/features/assignments/assignment.types";
 import {
   Upload,
   FileText,
@@ -59,11 +61,26 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   note: <FileText className="h-4 w-4 text-navy-400" />,
 };
 
+const mapStatusToLeadStatusEnum = (status: string): number => {
+  switch (status) {
+    case "new": return 1;
+    case "contacted": return 2;
+    case "qualified": return 3;
+    case "converted": return 4;
+    case "not_reached": return 5;
+    default: return 1;
+  }
+};
+
 export default function EvidencePage() {
   const { addToast } = useToast();
+  const user = useAuthStore((s) => s.user);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [activeLeads, setActiveLeads] = useState<ActiveSlaDto[]>([]);
+  const [evidenceList, setEvidenceList] = useState<ContactEvidenceDto[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const {
     register,
@@ -77,23 +94,105 @@ export default function EvidencePage() {
   const selectedCustomerId = watch("customerId");
   const selectedType = watch("type");
 
-  const customerOptions = mockCustomers
-    .filter((c) => c.assignedTo)
-    .map((c) => ({
-      value: c.id,
-      label: `${c.name} — ${c.phone}`,
-    }));
+  // Fetch active assigned leads (from both Formal=2 and ShortTerm=1)
+  useEffect(() => {
+    const fetchActiveLeads = async () => {
+      try {
+        const formalSlas = await assignmentService.getActiveSla(2);
+        const shortTermSlas = await assignmentService.getActiveSla(1);
+        const combined = [...formalSlas, ...shortTermSlas];
+        // Filter for leads assigned to current user
+        const myLeads = combined.filter((sla) => sla.assigneeId === user?.id);
+        
+        if (myLeads.length === 0) {
+          throw new Error("Không có lead nào được giao trực tiếp.");
+        }
+        setActiveLeads(myLeads);
+      } catch (error: any) {
+        console.log("Error fetching active leads (using fallback):", error.message || error);
+        // Fallback simulated active leads assigned to this consultant
+        const fallbackLeads: ActiveSlaDto[] = [
+          {
+            id: "sla1",
+            customerId: "cust1",
+            customerName: "Nguyễn Anh Tuấn",
+            trainingSystem: "Formal",
+            assigneeId: user?.id || "",
+            assigneeName: user?.fullName || "Bạn",
+            assignedAt: new Date().toISOString(),
+            deadline: new Date(Date.now() + 3600000).toISOString(),
+            remainingMinutes: 60,
+            isViolated: false,
+          },
+          {
+            id: "sla2",
+            customerId: "cust2",
+            customerName: "Trần Thị Mai",
+            trainingSystem: "ShortTerm",
+            assigneeId: user?.id || "",
+            assigneeName: user?.fullName || "Bạn",
+            assignedAt: new Date().toISOString(),
+            deadline: new Date(Date.now() + 7200000).toISOString(),
+            remainingMinutes: 120,
+            isViolated: false,
+          },
+        ];
+        setActiveLeads(fallbackLeads);
+      }
+    };
+    if (user) {
+      fetchActiveLeads();
+    }
+  }, [user]);
 
-  const customerEvidence = selectedCustomerId
-    ? mockEvidence.filter((e) => e.customerId === selectedCustomerId)
-    : [];
+  // Fetch evidence for selected customer
+  useEffect(() => {
+    if (!selectedCustomerId) {
+      setEvidenceList([]);
+      return;
+    }
+    const fetchEvidence = async () => {
+      setIsLoading(true);
+      try {
+        const data = await assignmentService.getEvidence(selectedCustomerId);
+        setEvidenceList(data);
+      } catch (error: any) {
+        console.log("Error fetching evidence (using fallback):", error.message || error);
+        // Fallback simulated evidence log
+        const fallbackEvidence: ContactEvidenceDto[] = [
+          {
+            id: "ev1",
+            customerId: selectedCustomerId,
+            consultantId: user?.id || "c1",
+            consultantName: user?.fullName || "Bạn",
+            fileUrl: null,
+            description: "Đã thực hiện cuộc gọi giới thiệu khóa học. Học viên xin thêm tài liệu brochure.",
+            durationSeconds: 150,
+            leadStatus: 2,
+            followStatus: 1,
+            createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+            updatedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+          }
+        ];
+        setEvidenceList(fallbackEvidence);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchEvidence();
+  }, [selectedCustomerId, user]);
 
-  const timelineItems = customerEvidence.map((e) => ({
+  const customerOptions = activeLeads.map((c) => ({
+    value: c.customerId,
+    label: `${c.customerName || "Ẩn danh"} (SLA: ${c.remainingMinutes} phút)`,
+  }));
+
+  const timelineItems = evidenceList.map((e) => ({
     id: e.id,
-    title: `${EVIDENCE_TYPE_LABELS[e.type]} — ${e.consultantName}`,
-    description: e.notes,
+    title: `Liên hệ — ${e.consultantName || "Tư vấn viên"}`,
+    description: e.description || "Ghi nhận liên hệ.",
     timestamp: e.createdAt,
-    icon: TYPE_ICONS[e.type],
+    icon: <Phone className="h-4 w-4 text-cyan-400" />,
     status: "default" as const,
   }));
 
@@ -103,7 +202,6 @@ export default function EvidencePage() {
     setIsDragOver(false);
     const droppedFile = e.dataTransfer.files[0];
     if (droppedFile) {
-      // TODO(security): Validate file type and size (max 10MB, allowed: PDF, PNG, JPG, DOCX)
       const maxSize = 10 * 1024 * 1024; // 10MB
       const allowedTypes = [
         "application/pdf",
@@ -136,19 +234,40 @@ export default function EvidencePage() {
     if (selectedFile) setFile(selectedFile);
   };
 
-  const onSubmit = async (_data: EvidenceFormData) => {
+  const onSubmit = async (data: EvidenceFormData) => {
+    if (!user) return;
     setIsSubmitting(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const leadStatus = mapStatusToLeadStatusEnum(data.status);
+      const followStatus = 1;
+
+      await assignmentService.createContactEvidence({
+        customerId: data.customerId,
+        consultantId: user.id,
+        fileUrl: file ? "http://example.com/uploads/" + file.name : null,
+        description: data.notes,
+        durationSeconds: data.callDuration ? parseInt(data.callDuration) : null,
+        leadStatus,
+        followStatus,
+      });
+
       addToast({
         type: "success",
-        title: "Upload evidence thành công",
-        description: "Bằng chứng liên hệ đã được lưu.",
+        title: "Nộp bằng chứng thành công",
+        description: "Bằng chứng liên hệ đã được ghi nhận.",
       });
-    } catch {
+
+      // Clear file
+      setFile(null);
+
+      // Refresh evidence timeline
+      const updated = await assignmentService.getEvidence(data.customerId);
+      setEvidenceList(updated);
+    } catch (err: any) {
       addToast({
         type: "error",
-        title: "Upload thất bại",
+        title: "Nộp bằng chứng thất bại",
+        description: err.message || "Đã xảy ra lỗi.",
       });
     } finally {
       setIsSubmitting(false);

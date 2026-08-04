@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Avatar } from "@/components/ui/avatar";
-import { Select } from "@/components/ui/select";
+import { Card, CardContent } from "@/shared/ui/components/ui/card";
+import { Button } from "@/shared/ui/components/ui/button";
+import { Input } from "@/shared/ui/components/ui/input";
+import { Badge } from "@/shared/ui/components/ui/badge";
+import { Avatar } from "@/shared/ui/components/ui/avatar";
+import { Select } from "@/shared/ui/components/ui/select";
 import {
   Dialog,
   DialogHeader,
@@ -14,11 +14,10 @@ import {
   DialogDescription,
   DialogClose,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { useToast } from "@/components/shared/toast";
-import { mockUsers } from "@/lib/mock-data";
-import { ROLE_LABELS, type Role } from "@/types/auth";
-import { formatDate } from "@/lib/utils";
+} from "@/shared/ui/components/ui/dialog";
+import { ROLE_LABELS, UserRole, type User } from "@/features/auth/auth.types";
+import { formatDate } from "@/shared/utils/utils";
+import { useUsers } from "@/features/auth/auth.hooks";
 import {
   Users,
   Search,
@@ -32,42 +31,40 @@ const ROLE_OPTIONS = Object.entries(ROLE_LABELS).map(([value, label]) => ({
   label,
 }));
 
-const ROLE_BADGE_VARIANTS: Record<Role, "cyan" | "warning" | "success"> = {
-  admin: "cyan",
-  manager: "warning",
-  consultant: "success",
+const ROLE_BADGE_VARIANTS: Record<
+  UserRole,
+  "success" | "warning" | "cyan" | "default" | "secondary"
+> = {
+  [UserRole.Admin]: "cyan",
+  [UserRole.Manager]: "warning",
+  [UserRole.Role3]: "default",
+  [UserRole.Role4]: "secondary",
+  [UserRole.Consultant]: "success",
 };
 
 export default function AdminUsersPage() {
-  const { addToast } = useToast();
+  const { users, isLoading, assignUser } = useUsers();
   const [search, setSearch] = useState("");
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [selectedRole, setSelectedRole] = useState<string>("");
+  const [selectedRole, setSelectedRole] = useState<UserRole>(UserRole.Consultant);
   const [isAssigning, setIsAssigning] = useState(false);
 
-  const filteredUsers = mockUsers.filter(
+  const filteredUsers = users.filter(
     (u) =>
       u.name.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase())
   );
 
-  const selectedUser = mockUsers.find((u) => u.id === selectedUserId);
+  const selectedUser = users.find((u) => u.id === selectedUserId);
 
   const handleAssignRole = async () => {
+    if (!selectedUserId) return;
     setIsAssigning(true);
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      addToast({
-        type: "success",
-        title: "Cập nhật quyền thành công",
-        description: `${selectedUser?.name} đã được gán vai trò ${ROLE_LABELS[selectedRole as Role]}.`,
-      });
+    const success = await assignUser(selectedUserId, selectedRole, null);
+    setIsAssigning(false);
+    if (success) {
       setRoleDialogOpen(false);
-    } catch {
-      addToast({ type: "error", title: "Cập nhật quyền thất bại" });
-    } finally {
-      setIsAssigning(false);
     }
   };
 
@@ -124,60 +121,74 @@ export default function AdminUsersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-navy-700/30">
-                {filteredUsers.map((user) => (
-                  <tr
-                    key={user.id}
-                    className="hover:bg-navy-800/30 transition-colors"
-                  >
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={user.name} size="sm" />
-                        <span className="text-sm font-medium text-navy-200">
-                          {user.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-navy-300">
-                      {user.email}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <Badge variant={ROLE_BADGE_VARIANTS[user.role]}>
-                        {ROLE_LABELS[user.role]}
-                      </Badge>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      {user.isActive ? (
-                        <div className="flex items-center gap-1 text-emerald-400 text-sm">
-                          <CheckCircle2 className="h-4 w-4" />
-                          Hoạt động
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1 text-navy-500 text-sm">
-                          <XCircle className="h-4 w-4" />
-                          Vô hiệu
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-navy-400">
-                      {formatDate(user.createdAt)}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="gap-1"
-                        onClick={() => {
-                          setSelectedUserId(user.id);
-                          setSelectedRole(user.role);
-                          setRoleDialogOpen(true);
-                        }}
-                      >
-                        <Shield className="h-3.5 w-3.5" />
-                        Phân quyền
-                      </Button>
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8 text-navy-400">
+                      Đang tải danh sách người dùng...
                     </td>
                   </tr>
-                ))}
+                ) : filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8 text-navy-400">
+                      Không tìm thấy người dùng nào
+                    </td>
+                  </tr>
+                ) : (
+                  filteredUsers.map((user) => (
+                    <tr
+                      key={user.id}
+                      className="hover:bg-navy-800/30 transition-colors"
+                    >
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={user.name} size="sm" />
+                          <span className="text-sm font-medium text-navy-200">
+                            {user.name}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-navy-300">
+                        {user.email}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <Badge variant={ROLE_BADGE_VARIANTS[user.role]}>
+                          {ROLE_LABELS[user.role]}
+                        </Badge>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {user.isActive ? (
+                          <div className="flex items-center gap-1 text-emerald-400 text-sm">
+                            <CheckCircle2 className="h-4 w-4" />
+                            Hoạt động
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 text-navy-500 text-sm">
+                            <XCircle className="h-4 w-4" />
+                            Vô hiệu
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-navy-400">
+                        {formatDate(user.createdAt)}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-1"
+                          onClick={() => {
+                            setSelectedUserId(user.id);
+                            setSelectedRole(user.role);
+                            setRoleDialogOpen(true);
+                          }}
+                        >
+                          <Shield className="h-3.5 w-3.5" />
+                          Phân quyền
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -209,8 +220,8 @@ export default function AdminUsersPage() {
             </label>
             <Select
               options={ROLE_OPTIONS}
-              value={selectedRole}
-              onChange={(e) => setSelectedRole(e.target.value)}
+              value={selectedRole.toString()}
+              onChange={(e) => setSelectedRole(Number(e.target.value) as UserRole)}
             />
           </div>
         </div>

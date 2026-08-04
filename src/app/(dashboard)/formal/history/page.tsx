@@ -1,67 +1,43 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Avatar } from "@/components/ui/avatar";
-import { FilterBar, type FilterGroup } from "@/components/shared/filter-bar";
-import { DataTable } from "@/components/shared/data-table";
-import { StatusBadge } from "@/components/shared/status-badge";
-import { mockCustomers, mockConsultants } from "@/lib/mock-data";
-import { maskPhone, formatDateTime } from "@/lib/utils";
-import { BRANCH_LABELS, type Branch } from "@/types/common";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { Card, CardHeader, CardTitle, CardContent } from "@/shared/ui/components/ui/card";
+import { Badge } from "@/shared/ui/components/ui/badge";
+import { Button } from "@/shared/ui/components/ui/button";
+import { Avatar } from "@/shared/ui/components/ui/avatar";
+import { DataTable } from "@/shared/ui/components/shared/data-table";
+import { formatDateTime } from "@/shared/utils/utils";
+import type { CustomerAssignmentHistoryDto } from "@/features/assignments/assignment.types";
 import type { ColumnDef } from "@tanstack/react-table";
-import { History, FileText, Download, Eye } from "lucide-react";
-import Link from "next/link";
-import { useToast } from "@/components/shared/toast";
+import { History, FileText, Download, Search, Clock, User, MessageSquare } from "lucide-react";
+import { useToast } from "@/shared/ui/components/shared/toast";
+import { assignmentService } from "@/features/assignments/assignment.service";
+import { EmptyState } from "@/shared/ui/components/shared/empty-state";
 
-interface HistoryRecord {
-  id: string;
-  customerName: string;
-  customerPhone: string;
-  branch: string;
-  status: string;
-  assignedToName: string;
-  assignedAt?: string;
-  updatedAt: string;
-  notes?: string;
-}
-
-const filterGroups: FilterGroup[] = [
-  {
-    key: "branch",
-    label: "Nhánh tuyển sinh",
-    options: [
-      { value: "formal", label: "Chính quy" },
-      { value: "driving", label: "Lái xe" },
-      { value: "shortterm", label: "Ngắn hạn" },
-    ],
-  },
-  {
-    key: "status",
-    label: "Trạng thái",
-    options: [
-      { value: "new", label: "Mới tạo" },
-      { value: "contacted", label: "Đã liên hệ" },
-      { value: "qualified", label: "Tiềm năng" },
-      { value: "converted", label: "Đã chuyển đổi" },
-      { value: "lost", label: "Thất bại / Hủy" },
-    ],
-  },
-];
-
-export default function FormalHistoryPage() {
+function FormalHistoryContent() {
   const { addToast } = useToast();
-  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const [assignments, setAssignments] = useState<CustomerAssignmentHistoryDto[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const customerId = searchParams.get("customerId");
 
-  const handleFilterChange = (key: string, value: string) => {
-    setFilterValues((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const handleResetFilters = () => {
-    setFilterValues({});
-  };
+  useEffect(() => {
+    if (!customerId) return;
+    
+    const fetchHistory = async () => {
+      setIsLoading(true);
+      try {
+        const data = await assignmentService.getHistory(customerId);
+        setAssignments(data);
+      } catch (error) {
+        console.error("Failed to fetch history:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchHistory();
+  }, [customerId]);
 
   const handleExport = () => {
     addToast({
@@ -71,98 +47,46 @@ export default function FormalHistoryPage() {
     });
   };
 
-  // Convert mock customers to history format
-  const allRecords: HistoryRecord[] = mockCustomers.map((c) => {
-    const consultant = mockConsultants.find((con) => con.id === c.assignedTo);
-    return {
-      id: c.id,
-      customerName: c.name,
-      customerPhone: c.phone,
-      branch: c.branch,
-      status: c.status,
-      assignedToName: consultant?.name || "Chưa giao",
-      assignedAt: c.createdAt,
-      updatedAt: c.updatedAt,
-      notes: c.notes,
-    };
-  });
-
-  const filteredRecords = allRecords.filter((rec) => {
-    if (filterValues.branch && rec.branch !== filterValues.branch) return false;
-    if (filterValues.status && rec.status !== filterValues.status) return false;
-    return true;
-  });
-
-  const columns: ColumnDef<HistoryRecord>[] = [
+  const columns: ColumnDef<CustomerAssignmentHistoryDto>[] = [
     {
-      accessorKey: "customerName",
-      header: "Khách hàng",
+      accessorKey: "assigneeName",
+      header: "Tư vấn viên (Người nhận)",
       cell: ({ row }) => {
         const record = row.original;
         return (
           <div className="flex items-center gap-3">
-            <Avatar name={record.customerName} size="sm" />
-            <div>
-              <p className="text-sm font-medium text-navy-200">{record.customerName}</p>
-              <p className="text-xs text-navy-500">{maskPhone(record.customerPhone)}</p>
-            </div>
+            <Avatar name={record.assigneeName || "User"} size="sm" />
+            <span className="text-sm font-medium text-navy-200">{record.assigneeName || "Ẩn danh"}</span>
           </div>
         );
       },
     },
     {
-      accessorKey: "branch",
-      header: "Nhánh",
-      cell: ({ row }) => {
-        const branch = row.original.branch as Branch;
-        return (
-          <Badge
-            variant={
-              branch === "formal"
-                ? "cyan"
-                : branch === "driving"
-                ? "warning"
-                : "success"
-            }
-          >
-            {BRANCH_LABELS[branch] || branch}
-          </Badge>
-        );
-      },
-    },
-    {
-      accessorKey: "status",
-      header: "Trạng thái",
-      cell: ({ row }) => <StatusBadge status={row.original.status} />,
-    },
-    {
-      accessorKey: "assignedToName",
-      header: "Tư vấn viên",
+      accessorKey: "reason",
+      header: "Lý do giao",
       cell: ({ row }) => (
-        <span className="text-sm text-navy-300 font-medium">
-          {row.original.assignedToName}
+        <Badge variant="secondary">
+          {row.original.reason || "Phân bổ tự động"}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "assignmentDate",
+      header: "Ngày giao",
+      cell: ({ row }) => (
+        <span className="text-xs text-navy-400 flex items-center gap-1">
+          <Clock className="h-3.5 w-3.5 text-navy-500" />
+          {formatDateTime(row.original.assignmentDate)}
         </span>
       ),
     },
     {
-      accessorKey: "updatedAt",
-      header: "Cập nhật lần cuối",
+      accessorKey: "note",
+      header: "Ghi chú",
       cell: ({ row }) => (
-        <span className="text-xs text-navy-400">
-          {formatDateTime(row.original.updatedAt)}
+        <span className="text-sm text-navy-300">
+          {row.original.note || "—"}
         </span>
-      ),
-    },
-    {
-      id: "actions",
-      header: "Hành động",
-      cell: ({ row }) => (
-        <Link href={`/evidence?customer=${row.original.id}`}>
-          <Button variant="ghost" size="sm" className="gap-1 text-cyan-400">
-            <Eye className="h-3.5 w-3.5" />
-            Lịch sử
-          </Button>
-        </Link>
       ),
     },
   ];
@@ -173,10 +97,10 @@ export default function FormalHistoryPage() {
         <div>
           <h1 className="text-xl font-bold text-navy-100 flex items-center gap-2">
             <History className="h-5 w-5 text-cyan-400" />
-            Lịch sử & Kho lưu trữ Lead
+            Lịch sử chăm sóc Lead
           </h1>
           <p className="text-sm text-navy-400 mt-0.5">
-            Tra cứu toàn bộ lịch sử lead, phân công và trạng thái xử lý
+            Tra cứu toàn bộ lịch sử phân công và trạng thái xử lý của khách hàng
           </p>
         </div>
         <Button variant="outline" onClick={handleExport} className="gap-2">
@@ -185,26 +109,48 @@ export default function FormalHistoryPage() {
         </Button>
       </div>
 
-      {/* Filter Bar */}
-      <FilterBar
-        groups={filterGroups}
-        values={filterValues}
-        onChange={handleFilterChange}
-        onReset={handleResetFilters}
-      />
-
       {/* Table */}
       <Card>
-        <CardContent className="p-4">
-          <DataTable
-            columns={columns}
-            data={filteredRecords}
-            searchKey="customerName"
-            searchPlaceholder="Tìm kiếm theo tên khách hàng..."
-            defaultPageSize={10}
-          />
+        <CardContent className="p-4 relative min-h-[300px]">
+          {!customerId ? (
+            <EmptyState
+              title="Vui lòng chọn khách hàng"
+              description="Để xem lịch sử giao việc, hãy truyền tham số ?customerId=xxx vào đường dẫn."
+              icon={<Search className="h-8 w-8 text-navy-500" />}
+            />
+          ) : isLoading ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-navy-900/50 z-10 backdrop-blur-sm">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
+                <p className="text-sm font-medium text-navy-400">Đang tải dữ liệu...</p>
+              </div>
+            </div>
+          ) : assignments.length === 0 ? (
+            <EmptyState
+              title="Không có lịch sử"
+              description="Khách hàng này chưa có lịch sử giao việc nào."
+              icon={<History className="h-8 w-8 text-navy-500" />}
+            />
+          ) : (
+            <DataTable
+              columns={columns}
+              data={assignments}
+              searchKey="assigneeName"
+              searchPlaceholder="Tìm theo tên tư vấn viên..."
+              defaultPageSize={10}
+            />
+          )}
         </CardContent>
       </Card>
     </div>
   );
 }
+
+export default function FormalHistoryPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <FormalHistoryContent />
+    </Suspense>
+  );
+}
+

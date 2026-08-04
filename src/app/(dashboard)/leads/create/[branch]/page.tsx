@@ -5,16 +5,17 @@ import { useParams, useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select } from "@/components/ui/select";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/components/shared/toast";
-import { BRANCH_LABELS, type Branch } from "@/types/common";
-import { maskPhone } from "@/lib/utils";
+import { Button } from "@/shared/ui/components/ui/button";
+import { Input } from "@/shared/ui/components/ui/input";
+import { Label } from "@/shared/ui/components/ui/label";
+import { Textarea } from "@/shared/ui/components/ui/textarea";
+import { Select } from "@/shared/ui/components/ui/select";
+import { Card, CardHeader, CardTitle, CardContent } from "@/shared/ui/components/ui/card";
+import { Badge } from "@/shared/ui/components/ui/badge";
+import { useToast } from "@/shared/ui/components/shared/toast";
+import { formalService, shorttermService } from "@/features/customers/customer.service";
+import { BRANCH_LABELS, type Branch } from "@/shared/types/common";
+import { maskPhone } from "@/shared/utils/utils";
 import {
   User,
   Phone,
@@ -125,22 +126,44 @@ export default function CreateLeadPage() {
 
   const formValues = watch();
 
+  const mapSourceToEnum = (src?: string | null): number => {
+    switch (src) {
+      case "website": return 1;
+      case "facebook": return 2;
+      case "referral": return 5;
+      case "hotline": return 11;
+      default: return 9; // DataEntry
+    }
+  };
+
   const onSubmit = async (_data: Record<string, unknown>) => {
     setIsSubmitting(true);
     try {
-      // TODO: Replace with actual API call per branch
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const payload = {
+        fullName: _data.name as string,
+        mobile: _data.phone as string,
+        source: mapSourceToEnum(_data.source as string),
+      };
+
+      if (branch === "formal") {
+        await formalService.createCustomer(payload);
+      } else if (branch === "shortterm") {
+        await shorttermService.createCustomer(payload);
+      } else {
+        throw new Error("Nhánh tuyển sinh không hỗ trợ API mới này.");
+      }
+
       addToast({
         type: "success",
         title: "Tạo lead thành công",
         description: `Lead ${formValues.name} đã được tạo cho nhánh ${branchLabel}.`,
       });
       router.push("/");
-    } catch {
+    } catch (err: any) {
       addToast({
         type: "error",
         title: "Tạo lead thất bại",
-        description: "Đã xảy ra lỗi. Vui lòng thử lại.",
+        description: err.message || "Đã xảy ra lỗi. Vui lòng thử lại.",
       });
     } finally {
       setIsSubmitting(false);

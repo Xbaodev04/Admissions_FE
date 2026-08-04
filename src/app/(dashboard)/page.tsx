@@ -1,20 +1,18 @@
 "use client";
 
-import { useAuthStore } from "@/store/auth-store";
-import { KpiCard } from "@/components/shared/kpi-card";
-import { StatusBadge } from "@/components/shared/status-badge";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Avatar } from "@/components/ui/avatar";
-import {
-  mockDashboardStats,
-  mockAssignments,
-  mockActivities,
-} from "@/lib/mock-data";
-import { formatDateTime, maskPhone } from "@/lib/utils";
-import { canAccessAdmin } from "@/types/auth";
+import { useAuthStore } from "@/features/auth/auth.store";
+import { KpiCard } from "@/shared/ui/components/shared/kpi-card";
+import { StatusBadge } from "@/shared/ui/components/shared/status-badge";
+import { Card, CardHeader, CardTitle, CardContent } from "@/shared/ui/components/ui/card";
+import { Badge } from "@/shared/ui/components/ui/badge";
+import { Button } from "@/shared/ui/components/ui/button";
+import { Avatar } from "@/shared/ui/components/ui/avatar";
+import type { ActivityItem, Assignment } from "@/features/assignments/assignment.types";
+import { formatDateTime, maskPhone } from "@/shared/utils/utils";
+import { canAccessAdmin } from "@/features/auth/auth.types";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   Users,
   Timer,
@@ -45,16 +43,43 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
   const isManager = user ? canAccessAdmin(user.role) : false;
-  const stats = mockDashboardStats;
+  const router = useRouter();
+
+  useEffect(() => {
+    if (user && !isManager) {
+      router.replace("/reports/assignment");
+    }
+  }, [user, isManager, router]);
+
+  if (!user || !isManager) {
+    return null; // or a loading spinner, but null is fine to prevent flash
+  }
+
+  const [stats] = useState({
+    totalLeads: 0,
+    leadsTrend: 0,
+    activeSla: 0,
+    slaTrend: 0,
+    overdueSla: 0,
+    overdueTrend: 0,
+    unassignedLeads: 0,
+    unassignedTrend: 0,
+    formalLeads: 0,
+    drivingLeads: 0,
+    shorttermLeads: 0,
+  });
+  
+  const [activities] = useState<ActivityItem[]>([]);
+  const [assignments] = useState<Assignment[]>([]);
 
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Welcome header */}
       <div>
-        <h1 className="text-2xl font-bold text-navy-100">
+        <h1 className="text-2xl font-bold text-foreground">
           Xin chào, {user?.name?.split(" ").pop()} 👋
         </h1>
-        <p className="text-navy-400 mt-1">
+        <p className="text-muted-foreground mt-1">
           Đây là tổng quan hoạt động tuyển sinh hôm nay.
         </p>
       </div>
@@ -131,12 +156,6 @@ export default function DashboardPage() {
                 </Button>
               </Link>
             )}
-            <Link href="/evidence">
-              <Button variant="outline" className="gap-2">
-                <Upload className="h-4 w-4 text-amber-400" />
-                Upload Evidence
-              </Button>
-            </Link>
           </div>
         </CardContent>
       </Card>
@@ -145,8 +164,8 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Branch Overview Cards */}
         <div className="lg:col-span-2">
-          <h2 className="text-lg font-semibold text-navy-100 mb-4 flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-cyan-400" />
+          <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-cyan-400 dark:text-cyan-500" />
             Tổng quan nhánh
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 stagger-children">
@@ -158,13 +177,13 @@ export default function DashboardPage() {
                     <GraduationCap className="h-5 w-5 text-cyan-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-navy-200">Chính quy</p>
-                    <p className="text-xs text-navy-500">Formal</p>
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Chính quy</p>
+                    <p className="text-xs text-muted-foreground">Formal</p>
                   </div>
                 </div>
-                <p className="text-3xl font-bold text-navy-100">{stats.formalLeads}</p>
-                <p className="text-xs text-navy-500 mt-1">lead trong hệ thống</p>
-                <div className="mt-3 h-1.5 w-full bg-navy-800 rounded-full overflow-hidden">
+                <p className="text-3xl font-bold text-foreground">{stats.formalLeads}</p>
+                <p className="text-xs text-muted-foreground mt-1">lead trong hệ thống</p>
+                <div className="mt-3 h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-cyan-500 rounded-full transition-all duration-500"
                     style={{ width: `${(stats.formalLeads / stats.totalLeads) * 100}%` }}
@@ -181,13 +200,13 @@ export default function DashboardPage() {
                     <Car className="h-5 w-5 text-amber-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-navy-200">Lái xe</p>
-                    <p className="text-xs text-navy-500">Driving</p>
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Lái xe</p>
+                    <p className="text-xs text-muted-foreground">Driving</p>
                   </div>
                 </div>
-                <p className="text-3xl font-bold text-navy-100">{stats.drivingLeads}</p>
-                <p className="text-xs text-navy-500 mt-1">lead trong hệ thống</p>
-                <div className="mt-3 h-1.5 w-full bg-navy-800 rounded-full overflow-hidden">
+                <p className="text-3xl font-bold text-foreground">{stats.drivingLeads}</p>
+                <p className="text-xs text-muted-foreground mt-1">lead trong hệ thống</p>
+                <div className="mt-3 h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-amber-500 rounded-full transition-all duration-500"
                     style={{ width: `${(stats.drivingLeads / stats.totalLeads) * 100}%` }}
@@ -204,13 +223,13 @@ export default function DashboardPage() {
                     <BookOpen className="h-5 w-5 text-emerald-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-navy-200">Ngắn hạn</p>
-                    <p className="text-xs text-navy-500">ShortTerm</p>
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Ngắn hạn</p>
+                    <p className="text-xs text-muted-foreground">ShortTerm</p>
                   </div>
                 </div>
-                <p className="text-3xl font-bold text-navy-100">{stats.shorttermLeads}</p>
-                <p className="text-xs text-navy-500 mt-1">lead trong hệ thống</p>
-                <div className="mt-3 h-1.5 w-full bg-navy-800 rounded-full overflow-hidden">
+                <p className="text-3xl font-bold text-foreground">{stats.shorttermLeads}</p>
+                <p className="text-xs text-muted-foreground mt-1">lead trong hệ thống</p>
+                <div className="mt-3 h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-emerald-500 rounded-full transition-all duration-500"
                     style={{ width: `${(stats.shorttermLeads / stats.totalLeads) * 100}%` }}
@@ -223,28 +242,28 @@ export default function DashboardPage() {
 
         {/* Activity Feed */}
         <div>
-          <h2 className="text-lg font-semibold text-navy-100 mb-4 flex items-center gap-2">
-            <Activity className="h-5 w-5 text-cyan-400" />
+          <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+            <Activity className="h-5 w-5 text-cyan-400 dark:text-cyan-500" />
             Hoạt động gần đây
           </h2>
           <Card>
             <CardContent className="p-4 space-y-3">
-              {mockActivities.slice(0, 5).map((activity) => (
+              {activities.slice(0, 5).map((activity) => (
                 <div
                   key={activity.id}
-                  className="flex items-start gap-3 p-2 rounded-lg hover:bg-navy-800/50 transition-colors"
+                  className="flex items-start gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                 >
                   <div className="mt-0.5 flex-shrink-0">
                     {ACTIVITY_ICONS[activity.type]}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-navy-300">
-                      <span className="font-medium text-navy-200">
+                    <p className="text-sm text-slate-600 dark:text-slate-300">
+                      <span className="font-medium text-slate-800 dark:text-slate-200">
                         {activity.user}
                       </span>{" "}
                       {activity.message}
                     </p>
-                    <p className="text-xs text-navy-500 mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       {formatDateTime(activity.timestamp)}
                     </p>
                   </div>
@@ -258,13 +277,13 @@ export default function DashboardPage() {
       {/* Recent Assignments Table */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-navy-100 flex items-center gap-2">
-            <UserPlus className="h-5 w-5 text-cyan-400" />
+          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <UserPlus className="h-5 w-5 text-cyan-400 dark:text-cyan-500" />
             Giao việc gần đây
           </h2>
           {isManager && (
             <Link href="/assignment">
-              <Button variant="ghost" size="sm" className="gap-1 text-cyan-400">
+              <Button variant="ghost" size="sm" className="gap-1 text-cyan-600 dark:text-cyan-400">
                 Xem tất cả <ArrowRight className="h-3.5 w-3.5" />
               </Button>
             </Link>
@@ -274,39 +293,39 @@ export default function DashboardPage() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-navy-700/50">
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
+                <tr className="border-b border-border">
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Khách hàng
                   </th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Tư vấn viên
                   </th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Nhánh
                   </th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Trạng thái
                   </th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Ngày giao
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-navy-700/30">
-                {mockAssignments.slice(0, 5).map((assignment) => (
+              <tbody className="divide-y divide-border">
+                {assignments.slice(0, 5).map((assignment) => (
                   <tr
                     key={assignment.id}
-                    className="hover:bg-navy-800/30 transition-colors"
+                    className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors"
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
                         <Avatar name={assignment.customerName} size="sm" />
-                        <span className="text-sm font-medium text-navy-200">
+                        <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
                           {assignment.customerName}
                         </span>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-navy-300">
+                    <td className="px-5 py-3.5 text-sm text-slate-600 dark:text-slate-300">
                       {assignment.consultantName}
                     </td>
                     <td className="px-5 py-3.5">
@@ -329,7 +348,7 @@ export default function DashboardPage() {
                     <td className="px-5 py-3.5">
                       <StatusBadge status={assignment.status} />
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-navy-400">
+                    <td className="px-5 py-3.5 text-sm text-muted-foreground">
                       {formatDateTime(assignment.assignedAt)}
                     </td>
                   </tr>

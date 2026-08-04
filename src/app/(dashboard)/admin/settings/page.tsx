@@ -1,9 +1,9 @@
 "use client";
 
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Card, CardHeader, CardTitle, CardContent } from "@/shared/ui/components/ui/card";
+import { Button } from "@/shared/ui/components/ui/button";
+import { Input } from "@/shared/ui/components/ui/input";
+import { Label } from "@/shared/ui/components/ui/label";
 import { Settings, Globe, Bell, Shield, Database } from "lucide-react";
 
 export default function SettingsPage() {
@@ -77,33 +77,85 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Notifications placeholder */}
+        {/* Automation Rules */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Shield className="h-4 w-4 text-violet-400" />
+              Tự động phân bổ & Cảnh báo
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="autoAssignRule">Quy tắc phân bổ Lead</Label>
+                <select
+                  id="autoAssignRule"
+                  className="w-full h-10 rounded-md border border-navy-700/50 bg-navy-800/50 px-3 py-2 text-sm text-navy-100 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50"
+                  defaultValue="round-robin"
+                >
+                  <option value="round-robin">Round-Robin (Xoay vòng đều)</option>
+                  <option value="performance">Ưu tiên theo hiệu suất (SLA)</option>
+                  <option value="manual">Chỉ định thủ công</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="maxRetries">Số lần giao không liên hệ tối đa</Label>
+                <Input
+                  id="maxRetries"
+                  type="number"
+                  defaultValue="3"
+                />
+                <p className="text-xs text-navy-500">
+                  Giao quá số lần này sẽ gửi email cảnh báo và chuyển về Quản lý
+                </p>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="fallbackManager">Account Quản lý nhận Lead thu hồi</Label>
+                <select
+                  id="fallbackManager"
+                  className="w-full h-10 rounded-md border border-navy-700/50 bg-navy-800/50 px-3 py-2 text-sm text-navy-100 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50"
+                  defaultValue="manager1"
+                >
+                  <option value="manager1">Manager Tuyển Sinh (manager@crm.edu.vn)</option>
+                  <option value="admin1">System Admin (admin@crm.edu.vn)</option>
+                </select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Notifications config */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Bell className="h-4 w-4 text-emerald-400" />
-              Thông báo
+              Thông báo (Zalo/Email)
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-sm text-navy-400">
-              Cài đặt thông báo sẽ được phát triển trong phiên bản tiếp theo.
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Audit log placeholder */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Database className="h-4 w-4 text-violet-400" />
-              Audit Log
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-navy-400">
-              Nhật ký hoạt động hệ thống sẽ được phát triển trong phiên bản tiếp theo.
-            </p>
+          <CardContent className="space-y-4">
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2 flex flex-col justify-center">
+                <Label className="flex items-center gap-2">
+                  <input type="checkbox" defaultChecked className="accent-cyan-500" />
+                  Gửi Email khi có Lead mới
+                </Label>
+                <Label className="flex items-center gap-2">
+                  <input type="checkbox" defaultChecked className="accent-cyan-500" />
+                  Gửi thông báo Zalo ZNS khi có Lead mới
+                </Label>
+              </div>
+              <div className="space-y-2 flex flex-col justify-center">
+                 <Label className="flex items-center gap-2">
+                  <input type="checkbox" defaultChecked className="accent-rose-500" />
+                  Gửi Email cảnh báo vi phạm SLA
+                </Label>
+                 <Label className="flex items-center gap-2">
+                  <input type="checkbox" defaultChecked className="accent-rose-500" />
+                  Thông báo quản lý khi thu hồi Lead
+                </Label>
+              </div>
+            </div>
           </CardContent>
         </Card>
 

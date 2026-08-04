@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:is(.dark *));
 
 /* ============================================================
    CRM Admissions — Design System
@@ -11,22 +12,23 @@
   --font-mono: var(--font-geist-mono), "Fira Code", monospace;
 
   /* === Brand Colors === */
-  --color-navy-950: #020617;
-  --color-navy-900: #0F172A;
-  --color-navy-800: #1E293B;
-  --color-navy-700: #334155;
-  --color-navy-600: #475569;
-  --color-navy-500: #64748B;
-  --color-navy-400: #94A3B8;
-  --color-navy-300: #CBD5E1;
-  --color-navy-200: #E2E8F0;
-  --color-navy-100: #F1F5F9;
-  --color-navy-50: #F8FAFC;
+  --color-navy-950: var(--theme-navy-950);
+  --color-navy-900: var(--theme-navy-900);
+  --color-navy-800: var(--theme-navy-800);
+  --color-navy-700: var(--theme-navy-700);
+  --color-navy-600: var(--theme-navy-600);
+  --color-navy-500: var(--theme-navy-500);
+  --color-navy-400: var(--theme-navy-400);
+  --color-navy-300: var(--theme-navy-300);
+  --color-navy-200: var(--theme-navy-200);
+  --color-navy-100: var(--theme-navy-100);
+  --color-navy-50: var(--theme-navy-50);
 
-  --color-cyan-500: #06B6D4;
-  --color-cyan-400: #22D3EE;
-  --color-cyan-300: #67E8F9;
-  --color-cyan-600: #0891B2;
+  --color-cyan-700: #0f3559;
+  --color-cyan-600: #154a7c;
+  --color-cyan-500: #1d62a3;
+  --color-cyan-400: #388cd6;
+  --color-cyan-300: #5c9ad6;
 
   --color-emerald-500: #10B981;
   --color-emerald-400: #34D399;
@@ -40,33 +42,33 @@
   --color-rose-400: #FB7185;
   --color-rose-600: #E11D48;
 
-  /* === Semantic Colors (Dark Theme) === */
-  --color-background: #0B1120;
-  --color-foreground: #F1F5F9;
-  --color-card: #111827;
-  --color-card-foreground: #F1F5F9;
-  --color-popover: #1E293B;
-  --color-popover-foreground: #F1F5F9;
-  --color-primary: #06B6D4;
-  --color-primary-foreground: #020617;
-  --color-secondary: #1E293B;
-  --color-secondary-foreground: #CBD5E1;
-  --color-muted: #1E293B;
-  --color-muted-foreground: #94A3B8;
-  --color-accent: #22D3EE;
-  --color-accent-foreground: #020617;
-  --color-destructive: #F43F5E;
-  --color-destructive-foreground: #FFFFFF;
-  --color-success: #10B981;
-  --color-success-foreground: #FFFFFF;
-  --color-warning: #F59E0B;
-  --color-warning-foreground: #020617;
-  --color-border: #1E293B;
-  --color-input: #1E293B;
-  --color-ring: #06B6D4;
-  --color-sidebar: #0F172A;
-  --color-sidebar-foreground: #CBD5E1;
-  --color-sidebar-accent: #1E293B;
+  /* === Semantic Colors === */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
 
   /* Border Radius */
   --radius-sm: 0.375rem;
@@ -84,6 +86,99 @@
   --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
   --animate-shimmer: shimmer 1.5s infinite;
 }
+
+@layer base {
+  :root {
+    --background: #f0f2f5;
+    --foreground: #334155;
+    --card: #FFFFFF;
+    --card-foreground: #334155;
+    --popover: #FFFFFF;
+    --popover-foreground: #334155;
+    --primary: #154a7c;
+    --primary-foreground: #FFFFFF;
+    --secondary: #F1F5F9;
+    --secondary-foreground: #0F172A;
+    --muted: #F1F5F9;
+    --muted-foreground: #64748B;
+    --accent: #154a7c;
+    --accent-foreground: #FFFFFF;
+    --destructive: #F43F5E;
+    --destructive-foreground: #FFFFFF;
+    --success: #10B981;
+    --success-foreground: #FFFFFF;
+    --warning: #F59E0B;
+    --warning-foreground: #020617;
+    --border: #E2E8F0;
+    --input: #E2E8F0;
+    --ring: #154a7c;
+    --sidebar: #FFFFFF;
+    --sidebar-foreground: #334155;
+    --sidebar-accent: #E2E8F0;
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: #cbd5e1;
+    --scrollbar-thumb-hover: #94a3b8;
+
+    /* Navy inverted for light mode */
+    --theme-navy-950: #F8FAFC;
+    --theme-navy-900: #F1F5F9;
+    --theme-navy-800: #E2E8F0;
+    --theme-navy-700: #CBD5E1;
+    --theme-navy-600: #94A3B8;
+    --theme-navy-500: #64748B;
+    --theme-navy-400: #475569;
+    --theme-navy-300: #334155;
+    --theme-navy-200: #1E293B;
+    --theme-navy-100: #0F172A;
+    --theme-navy-50: #020617;
+  }
+
+  .dark {
+    --background: #121212;
+    --foreground: #E5E5E5;
+    --card: #181818;
+    --card-foreground: #E5E5E5;
+    --popover: #181818;
+    --popover-foreground: #E5E5E5;
+    --primary: #154a7c;
+    --primary-foreground: #FFFFFF;
+    --secondary: #282828;
+    --secondary-foreground: #E5E5E5;
+    --muted: #282828;
+    --muted-foreground: #A3A3A3;
+    --accent: #282828;
+    --accent-foreground: #FFFFFF;
+    --destructive: #F43F5E;
+    --destructive-foreground: #F1F5F9;
+    --success: #10B981;
+    --success-foreground: #FFFFFF;
+    --warning: #F59E0B;
+    --warning-foreground: #020617;
+    --border: #282828;
+    --input: #282828;
+    --ring: #154a7c;
+    --sidebar: #121212;
+    --sidebar-foreground: #E5E5E5;
+    --sidebar-accent: #282828;
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: #3E3E3E;
+    --scrollbar-thumb-hover: #555555;
+
+    /* Navy normal for dark mode */
+    --theme-navy-950: #020617;
+    --theme-navy-900: #0F172A;
+    --theme-navy-800: #1E293B;
+    --theme-navy-700: #334155;
+    --theme-navy-600: #475569;
+    --theme-navy-500: #64748B;
+    --theme-navy-400: #94A3B8;
+    --theme-navy-300: #CBD5E1;
+    --theme-navy-200: #E2E8F0;
+    --theme-navy-100: #F1F5F9;
+    --theme-navy-50: #F8FAFC;
+  }
+}
+
 
 /* ============================================================
    Keyframes
@@ -156,16 +251,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-navy-900);
+  background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-navy-600);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-navy-500);
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* ============================================================
@@ -205,7 +300,7 @@ body {
 }
 
 .bg-gradient-sidebar {
-  background: linear-gradient(180deg, #0B1120 0%, #0F172A 100%);
+  background: #ffffff;
 }
 
 /* Surface elevation layers */

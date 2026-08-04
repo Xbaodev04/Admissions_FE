@@ -1,51 +1,65 @@
 "use client";
 
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Avatar } from "@/components/ui/avatar";
-import { EmptyState } from "@/components/shared/empty-state";
-import { mockQueue } from "@/lib/mock-data";
-import { maskPhone, formatDateTime } from "@/lib/utils";
+import { Card, CardHeader, CardTitle, CardContent } from "@/shared/ui/components/ui/card";
+import { Badge } from "@/shared/ui/components/ui/badge";
+import { Avatar } from "@/shared/ui/components/ui/avatar";
+import { EmptyState } from "@/shared/ui/components/shared/empty-state";
+import { formatDateTime } from "@/shared/utils/utils";
+import type { QueueStatusDto } from "@/features/assignments/assignment.types";
+import { assignmentService } from "@/features/assignments/assignment.service";
+import { useState, useEffect } from "react";
 import {
   ClipboardList,
   Clock,
-  AlertCircle,
-  UserPlus,
+  UserCheck,
 } from "lucide-react";
-import Link from "next/link";
-
-const PRIORITY_VARIANTS: Record<string, "destructive" | "warning" | "default"> = {
-  high: "destructive",
-  medium: "warning",
-  low: "default",
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  high: "Cao",
-  medium: "Trung bình",
-  low: "Thấp",
-};
 
 export default function QueuePage() {
+  const [queue, setQueue] = useState<QueueStatusDto[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchQueue = async () => {
+      try {
+        const data = await assignmentService.getQueue(2); // 2 = Formal
+        // Sort queue by orderIndex
+        const sorted = data.sort((a, b) => a.orderIndex - b.orderIndex);
+        setQueue(sorted);
+      } catch (error) {
+        console.error("Failed to fetch queue:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchQueue();
+  }, []);
+
   return (
     <div className="animate-fade-in">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-navy-100 flex items-center gap-2">
           <ClipboardList className="h-5 w-5 text-cyan-400" />
-          Queue — Hàng đợi giao Lead
+          Queue — Hàng đợi nhận Lead
         </h1>
         <p className="text-sm text-navy-400 mt-0.5">
-          Các lead đang chờ được giao cho tư vấn viên
+          Danh sách tư vấn viên đang xếp hàng đợi nhận Lead tự động
         </p>
       </div>
 
       <Card>
-        <CardContent className="p-0">
-          {mockQueue.length === 0 ? (
+        <CardContent className="p-0 relative min-h-[300px]">
+          {isLoading ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-navy-900/50 z-10 backdrop-blur-sm">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
+                <p className="text-sm font-medium text-navy-400">Đang tải dữ liệu...</p>
+              </div>
+            </div>
+          ) : queue.length === 0 ? (
             <EmptyState
               title="Hàng đợi trống"
-              description="Hiện không có lead nào đang chờ giao."
+              description="Hiện không có tư vấn viên nào đang trong hàng đợi nhận lead."
               icon={<ClipboardList className="h-8 w-8 text-navy-500" />}
             />
           ) : (
@@ -53,64 +67,63 @@ export default function QueuePage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-navy-700/50 bg-navy-800/20">
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
-                      Khách hàng
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider w-16">
+                      Thứ tự
                     </th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
-                      SĐT
+                      Tư vấn viên
                     </th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
-                      Ưu tiên
+                      Tải hiện tại
                     </th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
-                      Thời gian chờ
+                      Tải tối đa
                     </th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
-                      Ngày tạo
+                      Trạng thái
                     </th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
-                      Hành động
+                      Lần giao cuối
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-navy-700/30">
-                  {mockQueue.map((item) => (
+                  {queue.map((item) => (
                     <tr
                       key={item.id}
                       className="hover:bg-navy-800/30 transition-colors"
                     >
+                      <td className="px-5 py-3.5 text-sm font-bold text-cyan-400">
+                        #{item.orderIndex}
+                      </td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
-                          <Avatar name={item.customerName} size="sm" />
+                          <Avatar name={item.consultantName || "User"} size="sm" />
                           <span className="text-sm font-medium text-navy-200">
-                            {item.customerName}
+                            {item.consultantName || "Ẩn danh"}
                           </span>
                         </div>
                       </td>
                       <td className="px-5 py-3.5 text-sm text-navy-300">
-                        {maskPhone(item.customerPhone)}
+                        {item.currentLoad} leads
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-navy-300">
+                        {item.maxLoad} leads
                       </td>
                       <td className="px-5 py-3.5">
-                        <Badge variant={PRIORITY_VARIANTS[item.priority]}>
-                          {PRIORITY_LABELS[item.priority]}
+                        <Badge variant={item.isActive ? "success" : "secondary"}>
+                          {item.isActive ? "Sẵn sàng" : "Ngoại tuyến / Bận"}
                         </Badge>
                       </td>
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-1 text-sm text-navy-300">
-                          <Clock className="h-3.5 w-3.5 text-navy-500" />
-                          {item.waitingTime}
-                        </div>
-                      </td>
                       <td className="px-5 py-3.5 text-sm text-navy-400">
-                        {formatDateTime(item.createdAt)}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <Link href="/assignment">
-                          <Button variant="ghost" size="sm" className="gap-1">
-                            <UserPlus className="h-3.5 w-3.5" />
-                            Giao
-                          </Button>
-                        </Link>
+                        {item.lastAssignedAt ? (
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3.5 w-3.5 text-navy-500" />
+                            {formatDateTime(item.lastAssignedAt)}
+                          </div>
+                        ) : (
+                          "Chưa được giao"
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -123,3 +136,4 @@ export default function QueuePage() {
     </div>
   );
 }
+
