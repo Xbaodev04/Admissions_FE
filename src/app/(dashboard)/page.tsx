@@ -174,32 +174,26 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-3">
-            <Link href="/leads/create/formal">
-              <Button variant="outline" className="gap-2">
-                <GraduationCap className="h-4 w-4 text-cyan-400" />
-                Tạo Lead Chính quy
-              </Button>
-            </Link>
-            <Link href="/leads/create/driving">
-              <Button variant="outline" className="gap-2">
-                <Car className="h-4 w-4 text-amber-400" />
-                Tạo Lead Lái xe
-              </Button>
-            </Link>
-            <Link href="/leads/create/shortterm">
-              <Button variant="outline" className="gap-2">
-                <BookOpen className="h-4 w-4 text-emerald-400" />
-                Tạo Lead Ngắn hạn
-              </Button>
-            </Link>
             {isManager && (
               <Link href="/assignment">
                 <Button variant="outline" className="gap-2">
-                  <UserPlus className="h-4 w-4 text-violet-400" />
-                  Giao Lead
+                  <UserPlus className="h-4 w-4 text-cyan-400" />
+                  Giao Lead & Seed Data
                 </Button>
               </Link>
             )}
+            <Link href="/reports/assignment">
+              <Button variant="outline" className="gap-2">
+                <Activity className="h-4 w-4 text-emerald-400" />
+                Tiến độ & Báo cáo cá nhân
+              </Button>
+            </Link>
+            <Link href="/formal/history">
+              <Button variant="outline" className="gap-2">
+                <Users className="h-4 w-4 text-violet-400" />
+                Lịch sử phân bổ
+              </Button>
+            </Link>
           </div>
         </CardContent>
       </Card>

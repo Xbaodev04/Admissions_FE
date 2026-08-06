@@ -3,17 +3,18 @@
 import * as React from "react";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { Avatar } from "@/shared/ui/components/ui/avatar";
-import { ROLE_LABELS, UserRole, RoleTeam } from "@/features/auth/auth.types";
+import { ROLE_LABELS, UserRole, canAccessAdmin } from "@/features/auth/auth.types";
 import {
   Search,
-  Bell,
   LogOut,
   ChevronDown,
   Menu,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/shared/utils/utils";
 import { ThemeToggle } from "@/shared/ui/components/shared/theme-toggle";
 import { useToast } from "@/shared/ui/components/shared/toast";
+import { ConfirmDialog } from "@/shared/ui/components/shared/confirm-dialog";
 import { useCheckInStatus } from "@/features/assignments/useCheckInStatus";
 import { useCheckIn, useCheckOut } from "@/features/assignments/assignment.hooks";
 
@@ -28,6 +29,8 @@ export function Topbar({ sidebarCollapsed, onMenuClick }: TopbarProps) {
   const { addToast } = useToast();
   const [showDropdown, setShowDropdown] = React.useState(false);
   const [searchFocused, setSearchFocused] = React.useState(false);
+  const [confirmStatusModalOpen, setConfirmStatusModalOpen] = React.useState(false);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   // Hook-based check-in status mapping to the backend queue
   const { isCheckedIn, isLoading: isQueueLoading } = useCheckInStatus();
@@ -37,43 +40,59 @@ export function Topbar({ sidebarCollapsed, onMenuClick }: TopbarProps) {
   const isToggling = isCheckingIn || isCheckingOut || isQueueLoading;
   const dropdownRef = React.useRef<HTMLDivElement>(null);
 
-  // Kiểm tra điều kiện hiển thị nút Check-in/Out cho Elementary (4), Formal (5), hoặc Driving (6)
+  // Ẩn nút Check-in đối với Admin, hiển thị hai chiều Check-in/Check-out đối với Nhân viên
   const canShowCheckInOut = React.useMemo(() => {
     if (!user) return false;
-
-    const userTeam = user.roleTeam ? String(user.roleTeam).toLowerCase() : "";
-    const isElementary = userTeam === "nhóm sơ cấp" || userTeam === "elementary" || userTeam === "4";
-    const isFormal = userTeam === "nhóm chính quy" || userTeam === "formal" || userTeam === "5";
-    const isDriving = userTeam === "nhóm lái xe" || userTeam === "driving" || userTeam === "6";
-
-    return isElementary || isFormal || isDriving;
+    if (canAccessAdmin(user.role)) return false;
+    return true;
   }, [user]);
 
   const toggleStatus = async () => {
     if (isToggling) return;
 
-    const actionText = isCheckedIn
-      ? "Check-out (Tắt trạng thái nhận lead)"
-      : "Check-in (Bật trạng thái nhận lead)";
-
-    const confirmChange = window.confirm(`Bạn có chắc chắn muốn thực hiện ${actionText}?`);
-    if (!confirmChange) return;
-
     try {
       if (isCheckedIn) {
-        await checkOut();
-        addToast({
-          type: "info",
-          title: "Đã check-out",
-          description: "Bạn đã tắt trạng thái sẵn sàng nhận lead.",
-        });
+        try {
+          await checkOut();
+          addToast({
+            type: "info",
+            title: "Đã Check-out",
+            description: "Bạn đã tắt trạng thái sẵn sàng nhận lead.",
+          });
+        } catch (err: any) {
+          const msg = err?.response?.data?.message || err?.message || "";
+          if (msg.toLowerCase().includes("chưa check-in") || msg.toLowerCase().includes("not checked in")) {
+            await checkIn();
+            addToast({
+              type: "success",
+              title: "Đã Check-in",
+              description: "Bạn đã sẵn sàng nhận lead.",
+            });
+          } else {
+            throw err;
+          }
+        }
       } else {
-        await checkIn();
-        addToast({
-          type: "success",
-          title: "Đã check-in",
-          description: "Bạn đã sẵn sàng nhận lead.",
-        });
+        try {
+          await checkIn();
+          addToast({
+            type: "success",
+            title: "Đã Check-in",
+            description: "Bạn đã sẵn sàng nhận lead.",
+          });
+        } catch (err: any) {
+          const msg = err?.response?.data?.message || err?.message || "";
+          if (msg.toLowerCase().includes("đã check-in") || msg.toLowerCase().includes("already checked in")) {
+            await checkOut();
+            addToast({
+              type: "info",
+              title: "Đã Check-out",
+              description: "Bạn đã tắt trạng thái sẵn sàng nhận lead.",
+            });
+          } else {
+            throw err;
+          }
+        }
       }
     } catch (err: any) {
       const errorMessage = err?.response?.data?.message || err?.message || "";
@@ -83,6 +102,11 @@ export function Topbar({ sidebarCollapsed, onMenuClick }: TopbarProps) {
         description: errorMessage || "Đã xảy ra lỗi.",
       });
     }
+  };
+
+  const handleConfirmToggle = async () => {
+    setConfirmStatusModalOpen(false);
+    await toggleStatus();
   };
 
   // Close dropdown on outside click
@@ -96,9 +120,26 @@ export function Topbar({ sidebarCollapsed, onMenuClick }: TopbarProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
-    clearAuth();
-    window.location.href = "/login";
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      // Tự động Check-out trước khi Đăng xuất nếu người dùng đang Check-in
+      if (isCheckedIn) {
+        try {
+          await checkOut();
+          addToast({
+            type: "info",
+            title: "Tự động Check-out",
+            description: "Hệ thống đã tự động Check-out trước khi đăng xuất.",
+          });
+        } catch {
+          // Bỏ qua lỗi checkOut khi logout nếu có
+        }
+      }
+    } finally {
+      clearAuth();
+      window.location.href = "/login";
+    }
   };
 
   return (
@@ -141,12 +182,12 @@ export function Topbar({ sidebarCollapsed, onMenuClick }: TopbarProps) {
           </div>
         </div>
 
-        {/* Right: Status Toggle, Notifications + Profile */}
+        {/* Right: Status Toggle, Profile */}
         <div className="flex items-center gap-3">
           {/* Online Status / Check-in Check-out Toggle */}
           {canShowCheckInOut && (
             <button
-              onClick={toggleStatus}
+              onClick={() => setConfirmStatusModalOpen(true)}
               disabled={isToggling}
               className={cn(
                 "flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all duration-300 cursor-pointer disabled:opacity-50",
@@ -180,15 +221,6 @@ export function Topbar({ sidebarCollapsed, onMenuClick }: TopbarProps) {
           {/* Theme Toggle */}
           <ThemeToggle />
 
-          {/* Notifications */}
-          <button
-            className="relative p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-            aria-label="Thông báo"
-          >
-            <Bell className="h-5 w-5" />
-            <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-950" />
-          </button>
-
           {/* Profile dropdown */}
           <div className="relative" ref={dropdownRef}>
             <button
@@ -217,16 +249,37 @@ export function Topbar({ sidebarCollapsed, onMenuClick }: TopbarProps) {
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-rose-500 dark:text-rose-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                  disabled={isLoggingOut}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-rose-500 dark:text-rose-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
                 >
-                  <LogOut className="h-4 w-4" />
-                  Đăng xuất
+                  {isLoggingOut ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <LogOut className="h-4 w-4" />
+                  )}
+                  {isLoggingOut ? "Đang đăng xuất..." : "Đăng xuất"}
                 </button>
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Confirmation Modal for Check-in / Check-out */}
+      <ConfirmDialog
+        open={confirmStatusModalOpen}
+        onClose={() => setConfirmStatusModalOpen(false)}
+        onConfirm={handleConfirmToggle}
+        title={isCheckedIn ? "Xác nhận Check-out" : "Xác nhận Check-in"}
+        description={
+          isCheckedIn
+            ? "Bạn có chắc chắn muốn Check-out? Trạng thái nhận lead tự động của bạn sẽ bị tắt."
+            : "Bạn có chắc chắn muốn Check-in? Bạn sẽ bật trạng thái sẵn sàng tiếp nhận lead tự động từ hệ thống."
+        }
+        confirmLabel={isCheckedIn ? "Check-out ngay" : "Check-in ngay"}
+        variant={isCheckedIn ? "warning" : "default"}
+        isLoading={isToggling}
+      />
     </header>
   );
 }

@@ -1,19 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardHeader, CardTitle, CardContent } from "@/shared/ui/components/ui/card";
 import { Button } from "@/shared/ui/components/ui/button";
 import { Input } from "@/shared/ui/components/ui/input";
 import { Badge } from "@/shared/ui/components/ui/badge";
 import { Avatar } from "@/shared/ui/components/ui/avatar";
-import { ConfirmDialog } from "@/shared/ui/components/shared/confirm-dialog";
+import {
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogClose,
+  DialogFooter,
+} from "@/shared/ui/components/ui/dialog";
 import { useToast } from "@/shared/ui/components/shared/toast";
 import { EmptyState } from "@/shared/ui/components/shared/empty-state";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { authService } from "@/features/auth/auth.service";
 import { type UserDto } from "@/features/auth/auth.types";
 import { useActiveSla, useQueueStatus, useManualAssign } from "@/features/assignments/assignment.hooks";
+import { MyQueueCard } from "@/features/assignments/components/my-queue-card";
 import { TrainingSystem, TRAINING_SYSTEM_LABELS } from "@/shared/contracts/api-contracts";
 import {
   Search,
@@ -23,6 +31,8 @@ import {
   Clock,
   Briefcase,
   CheckCircle2,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 
 export default function AssignmentPage() {
@@ -65,17 +75,42 @@ export default function AssignmentPage() {
     };
   });
 
-  // Filter lists based on search queries
-  const filteredLeads = activeLeads.filter(
-    (c) =>
+  // Filter unassigned leads (or violated leads needing reassignment)
+  const unassignedLeads = useMemo(() => {
+    return activeLeads.filter((lead) => {
+      const isUnassigned =
+        !lead.assigneeId ||
+        lead.assigneeId === "00000000-0000-0000-0000-000000000000" ||
+        lead.assigneeName === "Chưa phân công";
+      return isUnassigned || lead.isViolated;
+    });
+  }, [activeLeads]);
+
+  const filteredLeads = useMemo(() => {
+    return unassignedLeads.filter((c) =>
       c.customerName?.toLowerCase().includes(searchLead.toLowerCase())
-  );
+    );
+  }, [unassignedLeads, searchLead]);
 
   const filteredConsultants = enrichedConsultants.filter(
     (c) =>
       c.fullName.toLowerCase().includes(searchConsultant.toLowerCase()) ||
       c.userName.toLowerCase().includes(searchConsultant.toLowerCase())
   );
+
+  const handleSelectLead = (customerId: string) => {
+    setSelectedLead(customerId);
+    if (selectedConsultant) {
+      setConfirmOpen(true);
+    }
+  };
+
+  const handleSelectConsultant = (consultantId: string) => {
+    setSelectedConsultant(consultantId);
+    if (selectedLead) {
+      setConfirmOpen(true);
+    }
+  };
 
   const selectedLeadData = activeLeads.find((c) => c.customerId === selectedLead);
   const selectedConsultantData = enrichedConsultants.find(
@@ -109,11 +144,17 @@ export default function AssignmentPage() {
   };
 
   const getSystemBadgeLabel = (system: string | number | null | undefined) => {
-    if (system === null || system === undefined) return "Formal";
+    if (system === null || system === undefined) return "Chính quy";
+    if (typeof system === "string") {
+      const lower = system.toLowerCase();
+      if (lower.includes("formal")) return "Chính quy";
+      if (lower.includes("shortterm") || lower.includes("short_term") || lower.includes("short")) return "Sơ cấp";
+      if (lower.includes("driving")) return "Lái xe";
+    }
     const systemNum = Number(system);
-    if (systemNum === TrainingSystem.ShortTerm) return TRAINING_SYSTEM_LABELS[TrainingSystem.ShortTerm];
-    if (systemNum === TrainingSystem.Formal) return TRAINING_SYSTEM_LABELS[TrainingSystem.Formal];
-    if (systemNum === TrainingSystem.Driving) return TRAINING_SYSTEM_LABELS[TrainingSystem.Driving];
+    if (systemNum === TrainingSystem.ShortTerm || systemNum === 1) return "Sơ cấp";
+    if (systemNum === TrainingSystem.Formal || systemNum === 2) return "Chính quy";
+    if (systemNum === TrainingSystem.Driving || systemNum === 3) return "Lái xe";
     return String(system);
   };
 
@@ -128,111 +169,135 @@ export default function AssignmentPage() {
         </div>
       )}
 
-      {/* Header and Branch Filter Selector */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
           <h1 className="text-xl font-bold text-navy-100 flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-cyan-400" />
-            Giao Lead Thủ Công
+            Giao Lead & Hàng Đợi Phân Bổ
           </h1>
           <p className="text-sm text-navy-400 mt-0.5">
-            Chọn lead đang active và tư vấn viên để thực hiện chuyển giao công việc
+            Quản lý hàng đợi nhận lead, check-in và thực hiện chuyển giao lead công việc
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-navy-300">Hệ đào tạo:</span>
-          <select
-            value={selectedSystem ?? ""}
-            onChange={(e) => {
-              const val = e.target.value;
-              setSelectedSystem(val === "" ? undefined : Number(val));
-              setSelectedLead(null);
-              setSelectedConsultant(null);
-            }}
-            className="h-10 rounded-md border border-navy-700/50 bg-navy-800/50 px-3 py-2 text-sm text-navy-100 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
-          >
-            <option value="" className="bg-navy-950 text-navy-100">Tất cả hệ đào tạo</option>
-            <option value="1" className="bg-navy-950 text-navy-100">Sơ cấp</option>
-            <option value="2" className="bg-navy-950 text-navy-100">Chính quy</option>
-            <option value="3" className="bg-navy-950 text-navy-100">Lái xe</option>
-          </select>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-navy-300">Hệ đào tạo:</span>
+            <select
+              value={selectedSystem ?? ""}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedSystem(val === "" ? undefined : Number(val));
+                setSelectedLead(null);
+                setSelectedConsultant(null);
+              }}
+              className="h-10 rounded-md border border-navy-700/50 bg-navy-800/50 px-3 py-2 text-sm text-navy-100 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
+            >
+              <option value="" className="bg-navy-950 text-navy-100">Tất cả hệ đào tạo</option>
+              <option value="1" className="bg-navy-950 text-navy-100">Sơ cấp</option>
+              <option value="2" className="bg-navy-950 text-navy-100">Chính quy</option>
+              <option value="3" className="bg-navy-950 text-navy-100">Lái xe</option>
+            </select>
+          </div>
         </div>
       </div>
 
+      <div className="mb-6">
+        <MyQueueCard trainingSystem={selectedSystem} />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Lead Selection Card */}
         <div>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Users className="h-4 w-4 text-cyan-400" />
-                Lead chưa liên hệ ({filteredLeads.length})
+          <Card className="border border-slate-200 dark:border-navy-700/30 bg-white dark:bg-navy-800/20 backdrop-blur-md">
+            <CardHeader className="border-b border-slate-100 dark:border-navy-700/30 pb-3">
+              <CardTitle className="flex items-center gap-2 text-base font-bold">
+                <Users className="h-4 w-4 text-cyan-500" />
+                Lead chưa được giao ({filteredLeads.length})
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-4">
               <div className="relative mb-4">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-navy-500" />
                 <Input
-                  placeholder="Tìm lead..."
+                  placeholder="Tìm lead chưa phân công..."
                   className="pl-10"
                   value={searchLead}
                   onChange={(e) => setSearchLead(e.target.value)}
                 />
               </div>
 
-              <div className="space-y-2 max-h-[500px] overflow-y-auto">
+              <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
                 {filteredLeads.length === 0 ? (
                   <EmptyState
-                    title="Không có lead nào"
-                    description="Hiện tại không có lead nào đang chờ xử lý."
+                    title="Không có lead chưa giao"
+                    description="Tất cả khách hàng đã được phân công cho nhân viên."
                   />
                 ) : (
-                  filteredLeads.map((lead) => (
-                    <button
-                      key={lead.customerId}
-                      onClick={() => setSelectedLead(lead.customerId)}
-                      className={`w-full text-left p-3 rounded-lg border transition-all duration-200 ${
-                        selectedLead === lead.customerId
-                          ? "border-cyan-500/50 bg-cyan-500/5"
-                          : "border-navy-700/30 hover:border-navy-600 hover:bg-navy-800/30"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Avatar name={lead.customerName || "User"} size="sm" />
-                          <div>
-                            <p className="text-sm font-medium text-navy-200">
-                              {lead.customerName || "Ẩn danh"}
-                            </p>
-                            <p className="text-xs text-rose-400 flex items-center gap-1 mt-0.5">
-                              <Clock className="h-3 w-3" />
-                              SLA: {lead.remainingMinutes} phút
-                            </p>
+                  filteredLeads.map((lead) => {
+                    const isSelected = selectedLead === lead.customerId;
+                    return (
+                      <button
+                        key={lead.customerId}
+                        onClick={() => handleSelectLead(lead.customerId)}
+                        className={`w-full text-left p-3.5 rounded-xl border transition-all duration-200 ${
+                          isSelected
+                            ? "border-cyan-500 bg-cyan-500/15 dark:bg-cyan-500/20 shadow-md shadow-cyan-500/10 ring-2 ring-cyan-500/50"
+                            : "border-slate-200 dark:border-navy-700/50 bg-white dark:bg-navy-900/40 hover:border-cyan-400/60 hover:bg-cyan-500/5 dark:hover:bg-navy-800/60"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Avatar name={lead.customerName || "User"} size="sm" />
+                            <div>
+                              <p className={`text-sm font-bold ${isSelected ? "text-cyan-600 dark:text-cyan-300" : "text-slate-800 dark:text-navy-100"}`}>
+                                {lead.customerName || "Ẩn danh"}
+                              </p>
+                              {lead.isViolated || lead.remainingMinutes <= 0 ? (
+                                <p className="text-xs text-rose-500 dark:text-rose-400 flex items-center gap-1 mt-0.5 font-bold">
+                                  <AlertCircle className="h-3 w-3 text-rose-500" />
+                                  Vi phạm SLA (Cần thu hồi & giao lại)
+                                </p>
+                              ) : (
+                                <p className="text-xs text-amber-500 dark:text-amber-400 flex items-center gap-1 mt-0.5 font-medium">
+                                  <Clock className="h-3 w-3" />
+                                  SLA: {lead.remainingMinutes} phút
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2.5">
+                            {lead.isViolated || lead.remainingMinutes <= 0 ? (
+                              <Badge variant="destructive" className="font-semibold">
+                                Thu hồi & Giao lại
+                              </Badge>
+                            ) : (
+                              <Badge variant="cyan" className="font-semibold">
+                                {getSystemBadgeLabel(lead.trainingSystem)}
+                              </Badge>
+                            )}
+                            {isSelected && (
+                              <CheckCircle2 className="h-5 w-5 text-cyan-500 flex-shrink-0 animate-scale-in" />
+                            )}
                           </div>
                         </div>
-                        <Badge variant="cyan">
-                          {getSystemBadgeLabel(lead.trainingSystem)}
-                        </Badge>
-                      </div>
-                    </button>
-                  ))
+                      </button>
+                    );
+                  })
                 )}
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Consultant Selection Card */}
         <div>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Briefcase className="h-4 w-4 text-emerald-400" />
+          <Card className="border border-slate-200 dark:border-navy-700/30 bg-white dark:bg-navy-800/20 backdrop-blur-md">
+            <CardHeader className="border-b border-slate-100 dark:border-navy-700/30 pb-3">
+              <CardTitle className="flex items-center gap-2 text-base font-bold">
+                <Briefcase className="h-4 w-4 text-emerald-500" />
                 Tư vấn viên ({filteredConsultants.length})
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-4">
               <div className="relative mb-4">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-navy-500" />
                 <Input
@@ -243,48 +308,49 @@ export default function AssignmentPage() {
                 />
               </div>
 
-              <div className="space-y-2 max-h-[500px] overflow-y-auto">
+              <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
                 {filteredConsultants.length === 0 ? (
                   <EmptyState
                     title="Không có tư vấn viên"
                     description="Không tìm thấy tư vấn viên nào trực tuyến."
                   />
                 ) : (
-                  filteredConsultants.map((consultant) => (
-                    <button
-                      key={consultant.consultantId}
-                      onClick={() => setSelectedConsultant(consultant.consultantId)}
-                      className={`w-full text-left p-3 rounded-lg border transition-all duration-200 ${
-                        selectedConsultant === consultant.consultantId
-                          ? "border-cyan-500/50 bg-cyan-500/5"
-                          : "border-navy-700/30 hover:border-navy-600 hover:bg-navy-800/30"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Avatar name={consultant.fullName || "User"} size="sm" />
-                          <div>
-                            <p className="text-sm font-medium text-navy-200">
-                              {consultant.fullName}
-                            </p>
-                            <p className="text-xs text-navy-500">
-                              SĐT: {consultant.mobile}
-                            </p>
+                  filteredConsultants.map((consultant) => {
+                    const isSelected = selectedConsultant === consultant.consultantId;
+                    return (
+                      <button
+                        key={consultant.consultantId}
+                        onClick={() => handleSelectConsultant(consultant.consultantId)}
+                        className={`w-full text-left p-3.5 rounded-xl border transition-all duration-200 ${
+                          isSelected
+                            ? "border-emerald-500 bg-emerald-500/15 dark:bg-emerald-500/20 shadow-md shadow-emerald-500/10 ring-2 ring-emerald-500/50"
+                            : "border-slate-200 dark:border-navy-700/50 bg-white dark:bg-navy-900/40 hover:border-emerald-400/60 hover:bg-emerald-500/5 dark:hover:bg-navy-800/60"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Avatar name={consultant.fullName || "User"} size="sm" />
+                            <div>
+                              <p className={`text-sm font-bold ${isSelected ? "text-emerald-600 dark:text-emerald-300" : "text-slate-800 dark:text-navy-100"}`}>
+                                {consultant.fullName}
+                              </p>
+                              <p className="text-xs text-slate-500 dark:text-navy-400 font-medium">
+                                SĐT: {consultant.mobile}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2.5">
+                            <Badge variant="outline" className="text-xs text-slate-600 dark:text-navy-300 border-slate-300 dark:border-navy-700/50 bg-slate-100 dark:bg-navy-900/40 font-semibold">
+                              Tải: {consultant.currentLoad}/{consultant.maxLoad}
+                            </Badge>
+                            {isSelected && (
+                              <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0 animate-scale-in" />
+                            )}
                           </div>
                         </div>
-
-                        <div className="flex items-center gap-3">
-                          {/* Load Indicator display */}
-                          <Badge variant="outline" className="text-xs text-navy-400 border-navy-700/50 bg-navy-900/30">
-                            Tải: {consultant.currentLoad}/{consultant.maxLoad}
-                          </Badge>
-                          {selectedConsultant === consultant.consultantId && (
-                            <CheckCircle2 className="h-5 w-5 text-cyan-400" />
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  ))
+                      </button>
+                    );
+                  })
                 )}
               </div>
             </CardContent>
@@ -292,42 +358,74 @@ export default function AssignmentPage() {
         </div>
       </div>
 
-      {/* Manual Allocation Confirmation Action bar */}
-      {selectedLead && selectedConsultant && (
-        <div className="mt-6 p-4 glass rounded-xl flex items-center justify-between animate-slide-up border border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Avatar name={selectedLeadData?.customerName || ""} size="sm" />
-              <span className="text-sm font-medium text-navy-200">
-                {selectedLeadData?.customerName}
-              </span>
+      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
+        <DialogClose onClose={() => setConfirmOpen(false)} />
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-slate-100">
+            <UserPlus className="h-5 w-5 text-cyan-500" />
+            Xác nhận Phân công Lead thủ công
+          </DialogTitle>
+          <DialogDescription>
+            Vui lòng kiểm tra lại thông tin chuyển giao trước khi xác nhận.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="py-4 space-y-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-xl bg-slate-50 dark:bg-navy-900/60 border border-slate-200 dark:border-navy-700/40">
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <Avatar name={selectedLeadData?.customerName || "Lead"} size="md" />
+              <div>
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                  {selectedLeadData?.customerName || "Ẩn danh"}
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge variant="cyan" className="text-xs font-semibold">
+                    {getSystemBadgeLabel(selectedLeadData?.trainingSystem)}
+                  </Badge>
+                  <span className="text-xs text-rose-500 font-medium">
+                    SLA: {selectedLeadData?.remainingMinutes}p
+                  </span>
+                </div>
+              </div>
             </div>
-            <ArrowRight className="h-4 w-4 text-cyan-400" />
-            <div className="flex items-center gap-2">
-              <Avatar name={selectedConsultantData?.fullName || ""} size="sm" />
-              <span className="text-sm font-medium text-navy-200">
-                {selectedConsultantData?.fullName}
-              </span>
+
+            <div className="flex items-center justify-center p-2 rounded-full bg-cyan-500/10 text-cyan-500 my-1 sm:my-0">
+              <ArrowRight className="h-5 w-5 rotate-90 sm:rotate-0" />
+            </div>
+
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <Avatar name={selectedConsultantData?.fullName || "User"} size="md" />
+              <div>
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                  {selectedConsultantData?.fullName || "Tư vấn viên"}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-navy-400 mt-1 font-medium">
+                  SĐT: {selectedConsultantData?.mobile || "—"} • Tải: {selectedConsultantData?.currentLoad}/{selectedConsultantData?.maxLoad}
+                </p>
+              </div>
             </div>
           </div>
-          <Button onClick={() => setConfirmOpen(true)}>
-            <UserPlus className="h-4 w-4 text-white" />
-            Xác nhận giao
-          </Button>
         </div>
-      )}
 
-      {/* Confirmation Dialog component */}
-      <ConfirmDialog
-        open={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={handleAssign}
-        title="Xác nhận giao lead"
-        description={`Bạn có chắc muốn giao lead "${selectedLeadData?.customerName}" cho "${selectedConsultantData?.fullName}"?`}
-        confirmLabel="Xác nhận giao"
-        variant="warning"
-        isLoading={assignMutation.isPending}
-      />
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button
+            variant="ghost"
+            onClick={() => setConfirmOpen(false)}
+            disabled={assignMutation.isPending}
+            className="w-full sm:w-auto"
+          >
+            Hủy
+          </Button>
+          <Button
+            onClick={handleAssign}
+            isLoading={assignMutation.isPending}
+            className="w-full sm:w-auto bg-cyan-600 hover:bg-cyan-500 text-white font-semibold gap-2 shadow-md shadow-cyan-600/20"
+          >
+            <UserPlus className="h-4 w-4" />
+            Xác nhận giao Lead
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </div>
   );
 }

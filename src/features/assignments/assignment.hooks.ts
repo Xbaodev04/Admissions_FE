@@ -7,6 +7,7 @@ import type {
   ContactEvidenceDto,
   ManualAssignCommand,
   QueueStatusDto,
+  MyQueueStatusDto,
   CreateContactEvidenceCommand,
 } from "./assignment.types";
 
@@ -17,8 +18,12 @@ export const assignmentKeys = {
   all: ["assignment"] as const,
   activeSla: (trainingSystem?: number) =>
     [...assignmentKeys.all, "sla", "active", trainingSystem] as const,
+  myActiveSla: () =>
+    [...assignmentKeys.all, "sla", "me"] as const,
   queue: (trainingSystem?: number) =>
     [...assignmentKeys.all, "queue", trainingSystem] as const,
+  queueMe: () =>
+    [...assignmentKeys.all, "queue", "me"] as const,
   report: (fromDate?: string, toDate?: string) =>
     [...assignmentKeys.all, "report", fromDate, toDate] as const,
   history: (customerId: string) =>
@@ -38,10 +43,26 @@ export function useActiveSla(trainingSystem?: number) {
   });
 }
 
+export function useMyActiveSla() {
+  return useQuery<ActiveSlaDto[]>({
+    queryKey: assignmentKeys.myActiveSla(),
+    queryFn: () => assignmentService.getMyActiveSla(),
+  });
+}
+
 export function useQueueStatus(trainingSystem?: number) {
   return useQuery<QueueStatusDto[]>({
     queryKey: assignmentKeys.queue(trainingSystem),
     queryFn: () => assignmentService.getQueue(trainingSystem),
+  });
+}
+
+export function useQueueMe(enabled: boolean = true) {
+  return useQuery<QueueStatusDto | null>({
+    queryKey: assignmentKeys.queueMe(),
+    queryFn: () => assignmentService.getQueueMe(),
+    enabled,
+    retry: 1,
   });
 }
 
@@ -98,6 +119,9 @@ export function useManualAssign() {
     mutationFn: (data: ManualAssignCommand) => assignmentService.manualAssign(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: assignmentKeys.all });
+      queryClient.invalidateQueries({ queryKey: ["assignment"] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
     },
   });
 }

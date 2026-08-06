@@ -17,7 +17,6 @@ import {
   LayoutDashboard,
   Users,
   UserPlus,
-  ClipboardList,
   Timer,
   Settings,
   ChevronLeft,
@@ -51,14 +50,12 @@ const navGroups: NavGroup[] = [
   {
     title: "Quản lý Lead",
     items: [
-      { label: "Tạo Lead", href: "/leads/create/formal", icon: UserPlus, allowedRoles: [UserRole.EntryClerk, UserRole.Engineer, UserRole.Admin] },
-      { label: "Giao Lead", href: "/assignment", icon: UserPlus, requiresRole: "admin" },
+      { label: "Giao Lead & Hàng đợi", href: "/assignment", icon: UserPlus, requiresRole: "admin" },
     ],
   },
   {
     title: "Quản lý Assignment",
     items: [
-      { label: "Queue", href: "/formal/queue", icon: ClipboardList, requiresRole: "admin" },
       { label: "SLA", href: "/formal/sla", icon: Timer, requiresRole: "admin" },
       { label: "Lịch sử", href: "/formal/history", icon: History },
     ],

@@ -7,6 +7,7 @@ import type {
   CustomerAssignmentHistoryDto,
   ManualAssignCommand,
   QueueStatusDto,
+  MyQueueStatusDto,
   UpdateSlaConfigCommand,
 } from "./assignment.types";
 
@@ -49,9 +50,22 @@ export const assignmentService = {
     return response.data;
   },
 
+  async getQueueMe(): Promise<QueueStatusDto | null> {
+    const response = await apiClient.get<QueueStatusDto[]>("/api/Assignment/queue/me");
+    if (Array.isArray(response.data)) {
+      return response.data[0] || null;
+    }
+    return (response.data as QueueStatusDto) || null;
+  },
+
   async getActiveSla(trainingSystem?: number): Promise<ActiveSlaDto[]> {
     const params = trainingSystem !== undefined ? { trainingSystem } : {};
     const response = await apiClient.get<ActiveSlaDto[]>("/api/Assignment/sla/active", { params });
+    return response.data;
+  },
+
+  async getMyActiveSla(): Promise<ActiveSlaDto[]> {
+    const response = await apiClient.get<ActiveSlaDto[]>("/api/Assignment/sla/me");
     return response.data;
   },
 

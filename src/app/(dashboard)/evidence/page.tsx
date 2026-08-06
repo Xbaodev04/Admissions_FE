@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,8 +15,9 @@ import { Badge } from "@/shared/ui/components/ui/badge";
 import { Timeline } from "@/shared/ui/components/shared/timeline";
 import { useToast } from "@/shared/ui/components/shared/toast";
 import { useAuthStore } from "@/features/auth/auth.store";
+import { UserRole, canAccessAdmin } from "@/features/auth/auth.types";
 import { EVIDENCE_TYPE_LABELS } from "@/features/contact-evidence/evidence.types";
-import { useActiveSla, useEvidence, useCreateContactEvidence } from "@/features/assignments/assignment.hooks";
+import { useActiveSla, useMyActiveSla, useEvidence, useCreateContactEvidence } from "@/features/assignments/assignment.hooks";
 import {
   Upload,
   FileText,
@@ -94,20 +95,47 @@ export default function EvidencePage() {
   const selectedCustomerId = watch("customerId");
   const selectedType = watch("type");
 
-  // Fetch active SLAs for Formal (2) and ShortTerm (1)
-  const { data: formalSlas = [] } = useActiveSla(2);
-  const { data: shortTermSlas = [] } = useActiveSla(1);
-  const { data: drivingSlas = [] } = useActiveSla(3);
+  // Fetch my active SLAs (GET /api/Assignment/sla/me) and all active SLAs (GET /api/Assignment/sla/active)
+  const { data: myActiveSlas = [] } = useMyActiveSla();
+  const { data: allActiveSlas = [] } = useActiveSla();
 
-  const combinedSlas = [...formalSlas, ...shortTermSlas, ...drivingSlas];
-  const activeLeads = combinedSlas.filter((sla) => sla.assigneeId === user?.id);
+  const userActiveLeads = useMemo(() => {
+    const listMap = new Map<string, typeof myActiveSlas[0]>();
+
+    // Add leads from /api/Assignment/sla/me
+    myActiveSlas.forEach((sla) => {
+      if (sla.customerId) {
+        listMap.set(sla.customerId, sla);
+      }
+    });
+
+    // Add leads from /api/Assignment/sla/active assigned to user (or all if Admin)
+    allActiveSlas.forEach((sla) => {
+      if (sla.customerId && (sla.assigneeId === user?.id || (user && canAccessAdmin(user.role)))) {
+        if (!listMap.has(sla.customerId)) {
+          listMap.set(sla.customerId, sla);
+        }
+      }
+    });
+
+    return Array.from(listMap.values());
+  }, [myActiveSlas, allActiveSlas, user]);
+
+  const getSystemLabel = (system: string | number | null | undefined) => {
+    if (!system) return "Chính quy";
+    const str = String(system).toLowerCase();
+    if (str.includes("formal") || str === "2") return "Chính quy";
+    if (str.includes("short") || str === "1") return "Sơ cấp";
+    if (str.includes("driving") || str === "3") return "Lái xe";
+    return String(system);
+  };
 
   // Fetch evidence list using React Query
   const { data: evidenceList = [], isLoading } = useEvidence(selectedCustomerId || null);
 
-  const customerOptions = activeLeads.map((c) => ({
+  const customerOptions = userActiveLeads.map((c) => ({
     value: c.customerId,
-    label: `${c.customerName || "Ẩn danh"} (SLA: ${c.remainingMinutes} phút)`,
+    label: `${c.customerName || "Ẩn danh"} — [${getSystemLabel(c.trainingSystem)}] (SLA: ${c.remainingMinutes} phút)`,
   }));
 
   const timelineItems = evidenceList.map((e) => ({

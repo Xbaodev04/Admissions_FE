@@ -22,10 +22,10 @@ interface ToastContextType {
 const ToastContext = React.createContext<ToastContextType | undefined>(undefined);
 
 const TOAST_ICONS: Record<ToastType, React.ReactNode> = {
-  success: <CheckCircle2 className="h-5 w-5 text-emerald-400" />,
-  error: <XCircle className="h-5 w-5 text-rose-400" />,
-  warning: <AlertTriangle className="h-5 w-5 text-amber-400" />,
-  info: <Info className="h-5 w-5 text-cyan-400" />,
+  success: <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />,
+  error: <XCircle className="h-5 w-5 text-rose-600 dark:text-rose-400" />,
+  warning: <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />,
+  info: <Info className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />,
 };
 
 const TOAST_BORDER_COLORS: Record<ToastType, string> = {
@@ -60,7 +60,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           <div
             key={toast.id}
             className={cn(
-              "pointer-events-auto glass rounded-lg border-l-4 p-4 shadow-xl animate-slide-left",
+              "pointer-events-auto bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl border-l-4 border-y border-r border-slate-200/80 dark:border-slate-800 p-4 shadow-xl dark:shadow-2xl animate-slide-left transition-all duration-200",
               TOAST_BORDER_COLORS[toast.type]
             )}
           >
@@ -69,18 +69,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 {TOAST_ICONS[toast.type]}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-navy-100">
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                   {toast.title}
                 </p>
                 {toast.description && (
-                  <p className="text-xs text-navy-400 mt-1">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
                     {toast.description}
                   </p>
                 )}
               </div>
               <button
                 onClick={() => removeToast(toast.id)}
-                className="flex-shrink-0 text-navy-500 hover:text-navy-300 transition-colors"
+                className="flex-shrink-0 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-0.5 rounded-md"
               >
                 <X className="h-4 w-4" />
               </button>

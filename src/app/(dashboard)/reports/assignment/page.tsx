@@ -8,7 +8,8 @@ import { Button } from "@/shared/ui/components/ui/button";
 import { BarChart3, PieChart, Users, TrendingUp, AlertTriangle, Phone } from "lucide-react";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { UserRole } from "@/features/auth/auth.types";
-import { useAssignmentReport, useActiveSla } from "@/features/assignments/assignment.hooks";
+import { useAssignmentReport, useActiveSla, useMyActiveSla, useQueueMe } from "@/features/assignments/assignment.hooks";
+import { MyQueueCard } from "@/features/assignments/components/my-queue-card";
 
 export default function AssignmentReportPage() {
   const user = useAuthStore((s) => s.user);
@@ -18,11 +19,16 @@ export default function AssignmentReportPage() {
   const toDate = useMemo(() => new Date().toISOString(), []);
 
   // Fetch using React Query
-  const { data: reports = [], isLoading, isError } = useAssignmentReport(fromDate, toDate);
-  const { data: allActiveSla = [] } = useActiveSla();
-  const myActiveLeads = useMemo(() => {
-    return allActiveSla.filter((s) => s.assigneeId === user?.id);
-  }, [allActiveSla, user]);
+  const { data: reports = [], isLoading: isReportLoading } = useAssignmentReport(fromDate, toDate);
+  const { data: allActiveSla = [], isLoading: isSlaLoading } = useActiveSla();
+  const { data: myActiveLeads = [], isLoading: isMySlaLoading } = useMyActiveSla();
+  const { data: myQueue } = useQueueMe(!isAdmin);
+
+  const isLoading = isReportLoading || isSlaLoading || isMySlaLoading;
+
+  const currentLoad = myQueue?.currentLoad ?? myActiveLeads.length;
+  const maxLoad = myQueue?.maxLoad ?? 10;
+  const loadPercentage = Math.min(100, Math.round((currentLoad / Math.max(1, maxLoad)) * 100));
 
   // Filter or aggregate reports based on role
   const myReport = useMemo(() => {
@@ -36,12 +42,28 @@ export default function AssignmentReportPage() {
     };
   }, [reports, user]);
 
-  const totalAssigned = isAdmin ? reports.reduce((acc, r) => acc + r.totalAssigned, 0) : myReport.totalAssigned;
-  const slaFulfilled = isAdmin ? reports.reduce((acc, r) => acc + r.slaFulfilled, 0) : myReport.slaFulfilled;
-  const slaViolated = isAdmin ? reports.reduce((acc, r) => acc + r.slaViolated, 0) : myReport.slaViolated;
-  const pending = isAdmin ? reports.reduce((acc, r) => acc + r.pending, 0) : myReport.pending;
+  // Aggregated KPI numbers based on exact business logic:
+  // 1. Tổng Lead đã giao = Total assigned leads
+  const totalAssigned = isAdmin
+    ? (reports.length > 0 ? reports.reduce((acc, r) => acc + r.totalAssigned, 0) : allActiveSla.length)
+    : (myReport.totalAssigned > 0 ? myReport.totalAssigned : myActiveLeads.length);
 
-  const fulfillmentRate = totalAssigned > 0 ? Math.round((slaFulfilled / totalAssigned) * 100) : 0;
+  // 2. Đúng hạn SLA = Số lead đã upload bằng chứng liên hệ
+  const slaFulfilled = isAdmin
+    ? (reports.length > 0 ? reports.reduce((acc, r) => acc + r.slaFulfilled, 0) : 0)
+    : (myReport.slaFulfilled || 0);
+
+  // 3. Vi phạm SLA = Số lead quá thời gian liên hệ (quá hạn SLA)
+  const slaViolated = isAdmin
+    ? (reports.length > 0 && reports.some((r) => r.slaViolated > 0)
+        ? reports.reduce((acc, r) => acc + r.slaViolated, 0)
+        : allActiveSla.filter((s) => s.isViolated || s.remainingMinutes <= 0).length)
+    : (myReport.slaViolated > 0
+        ? myReport.slaViolated
+        : myActiveLeads.filter((s) => s.isViolated || s.remainingMinutes <= 0).length);
+
+  // 4. Đang chờ xử lý = Số lead còn lại chưa vi phạm và chưa upload bằng chứng
+  const pending = Math.max(0, totalAssigned - slaFulfilled - slaViolated);
 
   return (
     <div className="animate-fade-in space-y-6 relative min-h-[500px]">
@@ -70,6 +92,9 @@ export default function AssignmentReportPage() {
         <KpiCard title="Vi phạm SLA" value={slaViolated} icon={AlertTriangle} variant="rose" />
         <KpiCard title="Đang chờ xử lý" value={pending} icon={PieChart} variant="amber" />
       </div>
+
+      {/* Queue Widget for Admin */}
+      {isAdmin && <MyQueueCard />}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {isAdmin ? (
@@ -139,23 +164,34 @@ export default function AssignmentReportPage() {
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Hiệu suất xử lý SLA (Cá nhân)</CardTitle>
+                <CardTitle className="text-base flex items-center justify-between">
+                  <span>Tiến độ hoàn thành</span>
+                  <span className="text-xs font-semibold text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-0.5 rounded-full">
+                    Tải: {currentLoad} / {maxLoad} Lead
+                  </span>
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-slate-700 dark:text-slate-200">Bạn ({user?.name || "Tư vấn viên"})</span>
-                      <span className={fulfillmentRate >= 80 ? "text-emerald-500" : fulfillmentRate >= 50 ? "text-amber-500" : "text-rose-500"}>
-                        {fulfillmentRate}% đúng hạn
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full ${fulfillmentRate >= 80 ? "bg-emerald-500" : fulfillmentRate >= 50 ? "bg-amber-500" : "bg-rose-500"}`}
-                        style={{ width: `${fulfillmentRate}%` }}
-                      ></div>
-                    </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between text-sm font-medium">
+                    <span className="text-slate-700 dark:text-slate-200">
+                      Bạn ({user?.name || "Tư vấn viên"})
+                    </span>
+                    <span className="text-cyan-500 font-bold">
+                      {loadPercentage}% ({currentLoad}/{maxLoad} Lead)
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 dark:bg-navy-950 rounded-full h-3 overflow-hidden border border-slate-200 dark:border-navy-800">
+                    <div
+                      className={`h-full transition-all duration-500 ${
+                        loadPercentage >= 90
+                          ? "bg-rose-500"
+                          : loadPercentage >= 60
+                          ? "bg-amber-500"
+                          : "bg-cyan-500"
+                      }`}
+                      style={{ width: `${loadPercentage}%` }}
+                    />
                   </div>
                 </div>
               </CardContent>

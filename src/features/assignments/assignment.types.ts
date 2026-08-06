@@ -147,8 +147,28 @@ export interface QueueStatusDto {
   lastAssignedAt?: string | null;
 }
 
+export interface AssignedLeadDto {
+  customerId: string;
+  customerName?: string | null;
+  assignedAt?: string | null;
+  trainingSystem?: string | number | null;
+  status?: string | null;
+}
+
+export interface MyQueueStatusDto {
+  consultantId: string;
+  consultantName?: string | null;
+  currentLoad: number;
+  maxLoad: number;
+  isActive: boolean;
+  orderIndex?: number;
+  lastAssignedAt?: string | null;
+  assignedLeads?: AssignedLeadDto[] | null;
+}
+
 export interface UpdateSlaConfigCommand {
   slaDeadlineMinutes?: number | null;
   defaultManagerId?: string | null;
 }
+
 
