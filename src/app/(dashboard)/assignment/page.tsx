@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardHeader, CardTitle, CardContent } from "@/shared/ui/components/ui/card";
 import { Button } from "@/shared/ui/components/ui/button";
 import { Input } from "@/shared/ui/components/ui/input";
@@ -9,12 +10,11 @@ import { Avatar } from "@/shared/ui/components/ui/avatar";
 import { ConfirmDialog } from "@/shared/ui/components/shared/confirm-dialog";
 import { useToast } from "@/shared/ui/components/shared/toast";
 import { EmptyState } from "@/shared/ui/components/shared/empty-state";
-import { formatDateTime } from "@/shared/utils/utils";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { authService } from "@/features/auth/auth.service";
-import { assignmentService } from "@/features/assignments/assignment.service";
-import type { UserDto } from "@/features/auth/auth.types";
-import type { ActiveSlaDto } from "@/features/assignments/assignment.types";
+import { type UserDto } from "@/features/auth/auth.types";
+import { useActiveSla, useQueueStatus, useManualAssign } from "@/features/assignments/assignment.hooks";
+import { TrainingSystem, TRAINING_SYSTEM_LABELS } from "@/shared/contracts/api-contracts";
 import {
   Search,
   UserPlus,
@@ -28,60 +28,64 @@ import {
 export default function AssignmentPage() {
   const { addToast } = useToast();
   const user = useAuthStore((s) => s.user);
-  
+
+  const [selectedSystem, setSelectedSystem] = useState<number | undefined>(undefined);
   const [selectedLead, setSelectedLead] = useState<string | null>(null);
   const [selectedConsultant, setSelectedConsultant] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [isAssigning, setIsAssigning] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [searchLead, setSearchLead] = useState("");
   const [searchConsultant, setSearchConsultant] = useState("");
 
-  const [activeLeads, setActiveLeads] = useState<ActiveSlaDto[]>([]);
-  const [consultants, setConsultants] = useState<UserDto[]>([]);
+  // Query active SLAs with filter
+  const { data: activeLeads = [], isLoading: slasLoading } = useActiveSla(selectedSystem);
 
-  const fetchAssignmentData = async () => {
-    setIsLoading(true);
-    try {
-      // Fetch consultants (role 1)
-      const allUsers = await authService.getUsers();
-      const filteredConsultants = allUsers.filter((u) => u.role === 1);
-      setConsultants(filteredConsultants);
+  // Query current checked-in queue with filter
+  const { data: queueList = [], isLoading: queueLoading } = useQueueStatus(selectedSystem);
 
-      // Fetch active SLAs (leads currently assigned but not contacted)
-      const slas = await assignmentService.getActiveSla();
-      setActiveLeads(slas);
-    } catch (error) {
-      console.error("Error fetching assignment data:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Query all users to map extra details (like phone number)
+  const { data: allUsers = [], isLoading: usersLoading } = useQuery<UserDto[]>({
+    queryKey: ["auth", "users"],
+    queryFn: () => authService.getUsers(),
+  });
 
-  useEffect(() => {
-    fetchAssignmentData();
-  }, []);
+  const assignMutation = useManualAssign();
 
+  const isLoading = slasLoading || queueLoading || usersLoading;
+
+  // Enrich checked-in consultants with details from auth list
+  const enrichedConsultants = queueList.map((queueItem) => {
+    const userDetail = allUsers.find(
+      (u) => String(u.id).toLowerCase() === String(queueItem.consultantId).toLowerCase()
+    );
+    return {
+      ...queueItem,
+      fullName: userDetail?.fullName || queueItem.consultantName || "Tư vấn viên",
+      userName: userDetail?.userName || "",
+      mobile: userDetail?.mobile || "—",
+    };
+  });
+
+  // Filter lists based on search queries
   const filteredLeads = activeLeads.filter(
     (c) =>
       c.customerName?.toLowerCase().includes(searchLead.toLowerCase())
   );
 
-  const filteredConsultants = consultants.filter(
+  const filteredConsultants = enrichedConsultants.filter(
     (c) =>
-      c.fullName?.toLowerCase().includes(searchConsultant.toLowerCase())
+      c.fullName.toLowerCase().includes(searchConsultant.toLowerCase()) ||
+      c.userName.toLowerCase().includes(searchConsultant.toLowerCase())
   );
 
   const selectedLeadData = activeLeads.find((c) => c.customerId === selectedLead);
-  const selectedConsultantData = consultants.find(
-    (c) => c.id === selectedConsultant
+  const selectedConsultantData = enrichedConsultants.find(
+    (c) => c.consultantId === selectedConsultant
   );
 
   const handleAssign = async () => {
     if (!selectedLead || !selectedConsultant || !user) return;
-    setIsAssigning(true);
     try {
-      await assignmentService.manualAssign({
+      await assignMutation.mutateAsync({
         customerId: selectedLead,
         assigneeId: selectedConsultant,
         assignedById: user.id,
@@ -95,16 +99,22 @@ export default function AssignmentPage() {
       setSelectedLead(null);
       setSelectedConsultant(null);
       setConfirmOpen(false);
-      await fetchAssignmentData();
     } catch (err: any) {
       addToast({
         type: "error",
         title: "Giao lead thất bại",
         description: err.message || "Đã xảy ra lỗi.",
       });
-    } finally {
-      setIsAssigning(false);
     }
+  };
+
+  const getSystemBadgeLabel = (system: string | number | null | undefined) => {
+    if (system === null || system === undefined) return "Formal";
+    const systemNum = Number(system);
+    if (systemNum === TrainingSystem.ShortTerm) return TRAINING_SYSTEM_LABELS[TrainingSystem.ShortTerm];
+    if (systemNum === TrainingSystem.Formal) return TRAINING_SYSTEM_LABELS[TrainingSystem.Formal];
+    if (systemNum === TrainingSystem.Driving) return TRAINING_SYSTEM_LABELS[TrainingSystem.Driving];
+    return String(system);
   };
 
   return (
@@ -118,18 +128,40 @@ export default function AssignmentPage() {
         </div>
       )}
 
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-navy-100 flex items-center gap-2">
-          <UserPlus className="h-5 w-5 text-cyan-400" />
-          Giao Lead Thủ Công
-        </h1>
-        <p className="text-sm text-navy-400 mt-0.5">
-          Chọn lead đang active và tư vấn viên để thực hiện chuyển giao công việc
-        </p>
+      {/* Header and Branch Filter Selector */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div>
+          <h1 className="text-xl font-bold text-navy-100 flex items-center gap-2">
+            <UserPlus className="h-5 w-5 text-cyan-400" />
+            Giao Lead Thủ Công
+          </h1>
+          <p className="text-sm text-navy-400 mt-0.5">
+            Chọn lead đang active và tư vấn viên để thực hiện chuyển giao công việc
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-navy-300">Hệ đào tạo:</span>
+          <select
+            value={selectedSystem ?? ""}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSelectedSystem(val === "" ? undefined : Number(val));
+              setSelectedLead(null);
+              setSelectedConsultant(null);
+            }}
+            className="h-10 rounded-md border border-navy-700/50 bg-navy-800/50 px-3 py-2 text-sm text-navy-100 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
+          >
+            <option value="" className="bg-navy-950 text-navy-100">Tất cả hệ đào tạo</option>
+            <option value="1" className="bg-navy-950 text-navy-100">Sơ cấp</option>
+            <option value="2" className="bg-navy-950 text-navy-100">Chính quy</option>
+            <option value="3" className="bg-navy-950 text-navy-100">Lái xe</option>
+          </select>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Lead Selection */}
+        {/* Lead Selection Card */}
         <div>
           <Card>
             <CardHeader>
@@ -180,7 +212,7 @@ export default function AssignmentPage() {
                           </div>
                         </div>
                         <Badge variant="cyan">
-                          {lead.trainingSystem || "Formal"}
+                          {getSystemBadgeLabel(lead.trainingSystem)}
                         </Badge>
                       </div>
                     </button>
@@ -191,7 +223,7 @@ export default function AssignmentPage() {
           </Card>
         </div>
 
-        {/* Consultant Selection */}
+        {/* Consultant Selection Card */}
         <div>
           <Card>
             <CardHeader>
@@ -220,10 +252,10 @@ export default function AssignmentPage() {
                 ) : (
                   filteredConsultants.map((consultant) => (
                     <button
-                      key={consultant.id}
-                      onClick={() => setSelectedConsultant(consultant.id)}
+                      key={consultant.consultantId}
+                      onClick={() => setSelectedConsultant(consultant.consultantId)}
                       className={`w-full text-left p-3 rounded-lg border transition-all duration-200 ${
-                        selectedConsultant === consultant.id
+                        selectedConsultant === consultant.consultantId
                           ? "border-cyan-500/50 bg-cyan-500/5"
                           : "border-navy-700/30 hover:border-navy-600 hover:bg-navy-800/30"
                       }`}
@@ -233,16 +265,23 @@ export default function AssignmentPage() {
                           <Avatar name={consultant.fullName || "User"} size="sm" />
                           <div>
                             <p className="text-sm font-medium text-navy-200">
-                              {consultant.fullName || consultant.userName}
+                              {consultant.fullName}
                             </p>
                             <p className="text-xs text-navy-500">
-                              SĐT: {consultant.mobile || "—"}
+                              SĐT: {consultant.mobile}
                             </p>
                           </div>
                         </div>
-                        {selectedConsultant === consultant.id && (
-                          <CheckCircle2 className="h-5 w-5 text-cyan-400" />
-                        )}
+
+                        <div className="flex items-center gap-3">
+                          {/* Load Indicator display */}
+                          <Badge variant="outline" className="text-xs text-navy-400 border-navy-700/50 bg-navy-900/30">
+                            Tải: {consultant.currentLoad}/{consultant.maxLoad}
+                          </Badge>
+                          {selectedConsultant === consultant.consultantId && (
+                            <CheckCircle2 className="h-5 w-5 text-cyan-400" />
+                          )}
+                        </div>
                       </div>
                     </button>
                   ))
@@ -253,7 +292,7 @@ export default function AssignmentPage() {
         </div>
       </div>
 
-      {/* Assign Action */}
+      {/* Manual Allocation Confirmation Action bar */}
       {selectedLead && selectedConsultant && (
         <div className="mt-6 p-4 glass rounded-xl flex items-center justify-between animate-slide-up border border-white/10">
           <div className="flex items-center gap-3">
@@ -272,13 +311,13 @@ export default function AssignmentPage() {
             </div>
           </div>
           <Button onClick={() => setConfirmOpen(true)}>
-            <UserPlus className="h-4 w-4" />
+            <UserPlus className="h-4 w-4 text-white" />
             Xác nhận giao
           </Button>
         </div>
       )}
 
-      {/* Confirmation */}
+      {/* Confirmation Dialog component */}
       <ConfirmDialog
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
@@ -287,9 +326,8 @@ export default function AssignmentPage() {
         description={`Bạn có chắc muốn giao lead "${selectedLeadData?.customerName}" cho "${selectedConsultantData?.fullName}"?`}
         confirmLabel="Xác nhận giao"
         variant="warning"
-        isLoading={isAssigning}
+        isLoading={assignMutation.isPending}
       />
     </div>
   );
 }
-

@@ -1,13 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/shared/ui/components/ui/card";
 import { Badge } from "@/shared/ui/components/ui/badge";
 import { Avatar } from "@/shared/ui/components/ui/avatar";
 import { KpiCard } from "@/shared/ui/components/shared/kpi-card";
 import { formatDateTime } from "@/shared/utils/utils";
+import { useActiveSla } from "@/features/assignments/assignment.hooks";
 import type { ActiveSlaDto } from "@/features/assignments/assignment.types";
-import { assignmentService } from "@/features/assignments/assignment.service";
-import { useState, useEffect } from "react";
 import { EmptyState } from "@/shared/ui/components/shared/empty-state";
 import {
   Timer,
@@ -41,24 +41,17 @@ const SLA_STATUS_CONFIG: Record<
   },
 };
 
+const TRAINING_SYSTEM_OPTIONS = [
+  { value: "", label: "Tất cả hệ đào tạo" },
+  { value: "2", label: "Chính quy (Formal)" },
+  { value: "1", label: "Sơ cấp (ShortTerm)" },
+  { value: "3", label: "Lái xe (Driving)" },
+];
+
 export default function SlaPage() {
-  const [slaItems, setSlaItems] = useState<ActiveSlaDto[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchSla = async () => {
-      try {
-        const data = await assignmentService.getActiveSla(2); // 2 = Formal
-        setSlaItems(data);
-      } catch (error) {
-        console.error("Failed to fetch SLA:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchSla();
-  }, []);
+  const [selectedSystem, setSelectedSystem] = useState<string>("2");
+  const trainingSystem = selectedSystem ? Number(selectedSystem) : undefined;
+  const { data: slaItems = [], isLoading } = useActiveSla(trainingSystem);
 
   const getStatus = (item: ActiveSlaDto): SlaStatus => {
     if (item.isViolated) return "overdue";
@@ -72,14 +65,27 @@ export default function SlaPage() {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-navy-100 flex items-center gap-2">
-          <Timer className="h-5 w-5 text-cyan-400" />
-          SLA — Cam kết thời gian xử lý
-        </h1>
-        <p className="text-sm text-navy-400 mt-0.5">
-          Theo dõi tiến độ liên hệ và chăm sóc lead theo SLA quy định
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-navy-100 flex items-center gap-2">
+            <Timer className="h-5 w-5 text-cyan-400" />
+            SLA — Cam kết thời gian xử lý
+          </h1>
+          <p className="text-sm text-navy-400 mt-0.5">
+            Theo dõi tiến độ liên hệ và chăm sóc lead theo SLA quy định
+          </p>
+        </div>
+        <select
+          className="h-10 rounded-md border border-navy-700/50 bg-navy-800/50 px-3 py-2 text-sm text-navy-100 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
+          value={selectedSystem}
+          onChange={(e) => setSelectedSystem(e.target.value)}
+        >
+          {TRAINING_SYSTEM_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value} className="bg-navy-900 text-navy-100">
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* SLA Stats */}
@@ -197,4 +203,5 @@ export default function SlaPage() {
     </div>
   );
 }
+
 

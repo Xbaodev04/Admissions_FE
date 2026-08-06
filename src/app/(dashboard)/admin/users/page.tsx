@@ -3,240 +3,211 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/shared/ui/components/ui/card";
 import { Button } from "@/shared/ui/components/ui/button";
-import { Input } from "@/shared/ui/components/ui/input";
-import { Badge } from "@/shared/ui/components/ui/badge";
 import { Avatar } from "@/shared/ui/components/ui/avatar";
-import { Select } from "@/shared/ui/components/ui/select";
-import {
-  Dialog,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogClose,
-  DialogFooter,
-} from "@/shared/ui/components/ui/dialog";
-import { ROLE_LABELS, UserRole, type User } from "@/features/auth/auth.types";
-import { formatDate } from "@/shared/utils/utils";
-import { useUsers } from "@/features/auth/auth.hooks";
-import {
-  Users,
-  Search,
-  Shield,
-  CheckCircle2,
-  XCircle,
-} from "lucide-react";
+import { Badge } from "@/shared/ui/components/ui/badge";
+import { useUsers, useTeams } from "@/features/auth/auth.hooks";
+import { UserRole, ROLE_LABELS, ROLE_TEAM_LABELS, type UserDto, normalizeRole } from "@/features/auth/auth.types";
+import { Users, RefreshCw } from "lucide-react";
 
-const ROLE_OPTIONS = Object.entries(ROLE_LABELS).map(([value, label]) => ({
-  value,
-  label,
-}));
+export default function UsersManagementPage() {
+  const { userDtos, isLoading, refresh, assignUser } = useUsers();
+  const { teams, isLoading: isLoadingTeams } = useTeams();
 
-const ROLE_BADGE_VARIANTS: Record<
-  UserRole,
-  "success" | "warning" | "cyan" | "default" | "secondary"
-> = {
-  [UserRole.Admin]: "cyan",
-  [UserRole.Manager]: "warning",
-  [UserRole.Role3]: "default",
-  [UserRole.Role4]: "secondary",
-  [UserRole.Consultant]: "success",
-};
+  const [assigningUserId, setAssigningUserId] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-export default function AdminUsersPage() {
-  const { users, isLoading, assignUser } = useUsers();
-  const [search, setSearch] = useState("");
-  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [selectedRole, setSelectedRole] = useState<UserRole>(UserRole.Consultant);
-  const [isAssigning, setIsAssigning] = useState(false);
+  // Values for role/team editing
+  const [selectedRole, setSelectedRole] = useState<string>("");
+  const [selectedTeam, setSelectedTeam] = useState<string>("");
 
-  const filteredUsers = users.filter(
-    (u) =>
-      u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase())
-  );
+  const handleStartEdit = (user: UserDto) => {
+    setAssigningUserId(user.id);
+    setSelectedRole(String(user.role));
+    setSelectedTeam(user.teamId || "");
+  };
 
-  const selectedUser = users.find((u) => u.id === selectedUserId);
+  const handleCancelEdit = () => {
+    setAssigningUserId(null);
+    setSelectedRole("");
+    setSelectedTeam("");
+  };
 
-  const handleAssignRole = async () => {
-    if (!selectedUserId) return;
-    setIsAssigning(true);
-    const success = await assignUser(selectedUserId, selectedRole, null);
-    setIsAssigning(false);
-    if (success) {
-      setRoleDialogOpen(false);
+  const handleSaveUser = async (userId: string) => {
+    setIsProcessing(true);
+    try {
+      const roleNum = selectedRole ? Number(selectedRole) : null;
+      const teamVal = selectedTeam || null;
+      
+      const success = await assignUser(userId, roleNum, teamVal);
+      if (success) {
+        handleCancelEdit();
+      }
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   return (
-    <div className="animate-fade-in">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-navy-100 flex items-center gap-2">
-          <Users className="h-5 w-5 text-cyan-400" />
-          Quản lý người dùng
-        </h1>
-        <p className="text-sm text-navy-400 mt-0.5">
-          Quản lý tài khoản và phân quyền trong hệ thống
-        </p>
-      </div>
-
-      {/* Search */}
-      <div className="mb-6">
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-navy-500" />
-          <Input
-            placeholder="Tìm theo tên hoặc email..."
-            className="pl-10"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+    <div className="animate-fade-in relative min-h-[500px] space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-navy-100 flex items-center gap-2">
+            <Users className="h-5 w-5 text-cyan-400" />
+            Quản lý Người Dùng & Nhóm
+          </h1>
+          <p className="text-sm text-navy-400 mt-0.5">
+            Cấp quyền vai trò và phân bổ thành viên vào các nhóm tuyển sinh
+          </p>
         </div>
+        <Button variant="outline" size="sm" onClick={refresh} className="gap-1">
+          <RefreshCw className="h-3.5 w-3.5" />
+          Làm mới
+        </Button>
       </div>
 
-      {/* Users Table */}
       <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-navy-700/50 bg-navy-800/20">
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
-                    Người dùng
-                  </th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
-                    Vai trò
-                  </th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
-                    Trạng thái
-                  </th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
-                    Ngày tạo
-                  </th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
-                    Hành động
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-navy-700/30">
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={6} className="text-center py-8 text-navy-400">
-                      Đang tải danh sách người dùng...
-                    </td>
+        <CardContent className="p-0 relative min-h-[300px]">
+          {isLoading || isLoadingTeams ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-navy-900/50 z-10 backdrop-blur-sm">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
+                <p className="text-sm font-medium text-navy-400">Đang tải danh sách người dùng...</p>
+              </div>
+            </div>
+          ) : userDtos.length === 0 ? (
+            <div className="py-12 text-center text-navy-400">
+              Không tìm thấy người dùng nào trong hệ thống.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-navy-700/50 bg-navy-800/20">
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
+                      Nhân viên
+                    </th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
+                      Số điện thoại / Định danh
+                    </th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
+                      Vai trò
+                    </th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
+                      Nhóm (Team)
+                    </th>
+                    <th className="text-right px-5 py-3 text-xs font-semibold text-navy-400 uppercase tracking-wider">
+                      Thao tác
+                    </th>
                   </tr>
-                ) : filteredUsers.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="text-center py-8 text-navy-400">
-                      Không tìm thấy người dùng nào
-                    </td>
-                  </tr>
-                ) : (
-                  filteredUsers.map((user) => (
-                    <tr
-                      key={user.id}
-                      className="hover:bg-navy-800/30 transition-colors"
-                    >
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <Avatar name={user.name} size="sm" />
-                          <span className="text-sm font-medium text-navy-200">
-                            {user.name}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5 text-sm text-navy-300">
-                        {user.email}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <Badge variant={ROLE_BADGE_VARIANTS[user.role]}>
-                          {ROLE_LABELS[user.role]}
-                        </Badge>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        {user.isActive ? (
-                          <div className="flex items-center gap-1 text-emerald-400 text-sm">
-                            <CheckCircle2 className="h-4 w-4" />
-                            Hoạt động
+                </thead>
+                <tbody className="divide-y divide-navy-700/30">
+                  {userDtos.map((userDto) => {
+                    const isEditing = assigningUserId === userDto.id;
+                    const teamName = teams.find((t) => t.id === userDto.teamId)?.name;
+                    
+                    return (
+                      <tr key={userDto.id} className="hover:bg-navy-800/30 transition-colors">
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <Avatar name={userDto.fullName || userDto.userName || "User"} size="sm" />
+                            <div>
+                              <span className="text-sm font-medium text-navy-200 block">
+                                {userDto.fullName || "Ẩn danh"}
+                              </span>
+                              <span className="text-xs text-navy-400 block">
+                                {userDto.userName}
+                              </span>
+                            </div>
                           </div>
-                        ) : (
-                          <div className="flex items-center gap-1 text-navy-500 text-sm">
-                            <XCircle className="h-4 w-4" />
-                            Vô hiệu
+                        </td>
+                        <td className="px-5 py-3.5 text-sm text-navy-300">
+                          <div>
+                            <span className="block">{userDto.mobile || "—"}</span>
+                            <span className="text-xs text-navy-500 block">{userDto.identificationNumber || "—"}</span>
                           </div>
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5 text-sm text-navy-400">
-                        {formatDate(user.createdAt)}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="gap-1"
-                          onClick={() => {
-                            setSelectedUserId(user.id);
-                            setSelectedRole(user.role);
-                            setRoleDialogOpen(true);
-                          }}
-                        >
-                          <Shield className="h-3.5 w-3.5" />
-                          Phân quyền
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                        </td>
+                        <td className="px-5 py-3.5 text-sm text-navy-300">
+                          {isEditing ? (
+                            <select
+                              className="h-9 rounded-md border border-navy-700/50 bg-navy-800/50 px-2 py-1 text-xs text-navy-100 outline-none"
+                              value={selectedRole}
+                              onChange={(e) => setSelectedRole(e.target.value)}
+                            >
+                              {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                                <option key={value} value={value} className="bg-navy-900 text-navy-100">
+                                  {label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <Badge variant={normalizeRole(userDto.role) === UserRole.Admin ? "destructive" : "secondary"}>
+                              {ROLE_LABELS[normalizeRole(userDto.role)] || `Vai trò ${userDto.role}`}
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5 text-sm text-navy-300">
+                          {isEditing ? (
+                            <select
+                              className="h-9 rounded-md border border-navy-700/50 bg-navy-800/50 px-2 py-1 text-xs text-navy-100 outline-none w-48"
+                              value={selectedTeam}
+                              onChange={(e) => setSelectedTeam(e.target.value)}
+                            >
+                              <option value="" className="bg-navy-900 text-navy-400">
+                                -- Không thuộc nhóm --
+                              </option>
+                              {teams.map((team) => (
+                                <option key={team.id} value={team.id} className="bg-navy-950 text-navy-100">
+                                  {team.name} ({ROLE_TEAM_LABELS[team.roleTeam!] || "Chung"})
+                                </option>
+                              ))}
+                            </select>
+                          ) : userDto.teamId ? (
+                            <Badge variant="cyan">
+                              {teamName || "Đang tải..."}
+                            </Badge>
+                          ) : (
+                            <span className="text-navy-500 italic text-xs">Chưa thuộc nhóm nào</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5 text-right">
+                          {isEditing ? (
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                size="sm"
+                                onClick={() => handleSaveUser(userDto.id)}
+                                disabled={isProcessing}
+                              >
+                                Lưu
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={handleCancelEdit}
+                                disabled={isProcessing}
+                              >
+                                Hủy
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleStartEdit(userDto)}
+                            >
+                              Chỉnh sửa
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      {/* Role Assignment Dialog */}
-      <Dialog open={roleDialogOpen} onClose={() => setRoleDialogOpen(false)}>
-        <DialogClose onClose={() => setRoleDialogOpen(false)} />
-        <DialogHeader>
-          <DialogTitle>Phân quyền người dùng</DialogTitle>
-          <DialogDescription>
-            Thay đổi vai trò cho {selectedUser?.name}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 my-4">
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-navy-800/50">
-            <Avatar name={selectedUser?.name || ""} size="md" />
-            <div>
-              <p className="text-sm font-medium text-navy-200">
-                {selectedUser?.name}
-              </p>
-              <p className="text-xs text-navy-500">{selectedUser?.email}</p>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-navy-300">
-              Vai trò mới
-            </label>
-            <Select
-              options={ROLE_OPTIONS}
-              value={selectedRole.toString()}
-              onChange={(e) => setSelectedRole(Number(e.target.value) as UserRole)}
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button
-            variant="ghost"
-            onClick={() => setRoleDialogOpen(false)}
-          >
-            Hủy
-          </Button>
-          <Button onClick={handleAssignRole} isLoading={isAssigning}>
-            Cập nhật
-          </Button>
-        </DialogFooter>
-      </Dialog>
     </div>
   );
 }

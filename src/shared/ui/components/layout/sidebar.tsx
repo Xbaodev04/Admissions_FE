@@ -5,68 +5,69 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/shared/utils/utils";
 import { useAuthStore } from "@/features/auth/auth.store";
-import { canAccessAdmin, canManageUsers, UserRole } from "@/features/auth/auth.types";
+import {
+  canAccessAdmin,
+  canManageUsers,
+  canSubmitEvidence,
+  normalizeRole,
+  UserRole,
+  RoleTeam,
+} from "@/features/auth/auth.types";
 import {
   LayoutDashboard,
   Users,
   UserPlus,
   ClipboardList,
   Timer,
-  FileCheck,
   Settings,
-  Shield,
-  GraduationCap,
-  Car,
-  BookOpen,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
   History,
+  FileCheck,
 } from "lucide-react";
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
-  requiresRole?: UserRole;
+  requiresRole?: "admin";
+  allowedRoles?: UserRole[];
 }
 
 interface NavGroup {
   title: string;
   items: NavItem[];
 }
+
 const navGroups: NavGroup[] = [
   {
     title: "Tổng quan",
     items: [
-      { label: "Dashboard", href: "/", icon: LayoutDashboard, requiresRole: UserRole.Manager },
+      { label: "Dashboard", href: "/", icon: LayoutDashboard, requiresRole: "admin" },
       { label: "Tiến độ cá nhân", href: "/reports/assignment", icon: LayoutDashboard },
     ],
   },
   {
     title: "Quản lý Lead",
     items: [
-      { label: "Tạo Lead Chính quy", href: "/leads/create/formal", icon: GraduationCap, requiresRole: UserRole.Role3 },
-      { label: "Tạo Lead Ngắn hạn", href: "/leads/create/shortterm", icon: BookOpen, requiresRole: UserRole.Role3 },
-      { label: "Giao Lead", href: "/assignment", icon: UserPlus, requiresRole: UserRole.Admin },
-      { label: "Bằng chứng", href: "/evidence", icon: FileCheck, requiresRole: UserRole.Consultant },
+      { label: "Tạo Lead", href: "/leads/create/formal", icon: UserPlus, allowedRoles: [UserRole.EntryClerk, UserRole.Engineer, UserRole.Admin] },
+      { label: "Giao Lead", href: "/assignment", icon: UserPlus, requiresRole: "admin" },
     ],
   },
   {
-    title: "Chính quy",
+    title: "Quản lý Assignment",
     items: [
-      { label: "Queue", href: "/formal/queue", icon: ClipboardList, requiresRole: UserRole.Manager },
-      { label: "SLA", href: "/formal/sla", icon: Timer, requiresRole: UserRole.Manager },
+      { label: "Queue", href: "/formal/queue", icon: ClipboardList, requiresRole: "admin" },
+      { label: "SLA", href: "/formal/sla", icon: Timer, requiresRole: "admin" },
       { label: "Lịch sử", href: "/formal/history", icon: History },
     ],
   },
   {
     title: "Hệ thống",
     items: [
-      { label: "Ca làm việc", href: "/admin/shifts", icon: Users, requiresRole: UserRole.Manager },
-      { label: "Người dùng", href: "/admin/users", icon: Users, requiresRole: UserRole.Admin },
-      { label: "Phân quyền", href: "/admin/roles", icon: Shield, requiresRole: UserRole.Admin },
-      { label: "Cài đặt", href: "/admin/settings", icon: Settings, requiresRole: UserRole.Manager },
+      { label: "Quản lý người dùng", href: "/admin/users", icon: Users, requiresRole: "admin" },
+      { label: "Cài đặt", href: "/admin/settings", icon: Settings, requiresRole: "admin" },
     ],
   },
 ];
@@ -79,7 +80,7 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
-  const userRole = user?.role || UserRole.Consultant;
+  const userRole = normalizeRole(user?.role);
 
   const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>(() =>
     navGroups.reduce((acc, group) => ({ ...acc, [group.title]: true }), {})
@@ -89,18 +90,39 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     setExpandedGroups((prev) => ({ ...prev, [title]: !prev[title] }));
   };
 
-  const filteredGroups = navGroups
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) => {
-        if (!item.requiresRole) return true;
-        if (item.requiresRole === UserRole.Consultant) return userRole === UserRole.Consultant;
-        if (item.requiresRole === UserRole.Role3) return userRole === UserRole.Role3 || userRole === UserRole.Admin;
-        if (item.requiresRole === UserRole.Admin) return canManageUsers(userRole);
-        return canAccessAdmin(userRole);
-      }),
-    }))
-    .filter((group) => group.items.length > 0);
+  const filteredGroups = React.useMemo(() => {
+    let groups = JSON.parse(JSON.stringify(navGroups)) as NavGroup[];
+    
+    groups.forEach((g, gIdx) => {
+      g.items.forEach((item, iIdx) => {
+        item.icon = navGroups[gIdx].items[iIdx].icon;
+      });
+    });
+
+    if (user?.roleTeam === RoleTeam.Formal) {
+      groups[0].items.push({
+        label: "Bằng chứng liên hệ",
+        href: "/evidence",
+        icon: FileCheck
+      });
+      groups = groups.filter(g => g.title !== "Quản lý Lead" && g.title !== "Quản lý Assignment");
+    }
+
+    return groups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => {
+          if (item.allowedRoles && !item.allowedRoles.includes(userRole)) return false;
+          if (!item.requiresRole) return true;
+
+          if (item.requiresRole === "admin") return canManageUsers(userRole);
+          if (item.requiresRole === "submitEvidence") return canSubmitEvidence(userRole) || user?.roleTeam === RoleTeam.Formal;
+
+          return canAccessAdmin(userRole);
+        }),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [user, userRole]);
 
   return (
     <aside
@@ -108,7 +130,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         "fixed left-0 top-0 z-40 h-screen bg-white dark:bg-sidebar border-r border-slate-200 dark:border-border transition-all duration-300 flex flex-col shadow-sm dark:shadow-none",
         collapsed ? "w-[68px]" : "w-64"
       )}
-  >
+    >
       {/* Logo */}
       <div className="h-16 flex items-center px-4 border-b border-slate-200 dark:border-border">
         <Link href="/" className="flex items-center gap-2 overflow-hidden">
@@ -117,8 +139,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </div>
           {!collapsed && (
             <div className="min-w-0 flex flex-col justify-center">
-              <h1 className="text-xs font-bold text-primary dark:text-cyan-400 uppercase whitespace-nowrap">Trường Cao Đẳng Tây Đô</h1>
-              <p className="text-[9px] text-primary/80 dark:text-cyan-400/80 uppercase whitespace-nowrap">Thực học - Thực hành - Thực nghiệp</p>
+              <h1 className="text-xs font-bold text-primary dark:text-cyan-400 uppercase whitespace-nowrap">
+                Trường Cao Đẳng Tây Đô
+              </h1>
+              <p className="text-[9px] text-primary/80 dark:text-cyan-400/80 uppercase whitespace-nowrap">
+                Thực học - Thực hành - Thực nghiệp
+              </p>
             </div>
           )}
         </Link>
@@ -145,7 +171,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   />
                 </button>
               )}
-              
+
               <div
                 className={cn(
                   "space-y-1 overflow-hidden transition-all duration-300",
@@ -157,10 +183,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   const isActive =
                     pathname === item.href ||
                     (item.href !== "/" && pathname.startsWith(item.href));
-                  
+
                   let displayLabel = item.label;
-                  if (item.href === "/reports/assignment" && !canAccessAdmin(userRole)) {
-                    displayLabel = "Tiến độ cá nhân";
+                  if (item.href === "/reports/assignment" && canAccessAdmin(userRole)) {
+                    displayLabel = "Báo cáo phân công";
                   }
 
                   return (
@@ -176,7 +202,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                       )}
                       title={collapsed ? displayLabel : undefined}
                     >
-                      <Icon className={cn("h-4.5 w-4.5 flex-shrink-0", isActive && "text-white dark:text-cyan-400")} />
+                      <Icon
+                        className={cn(
+                          "h-4.5 w-4.5 flex-shrink-0",
+                          isActive && "text-white dark:text-cyan-400"
+                        )}
+                      />
                       {!collapsed && <span className="truncate">{displayLabel}</span>}
                     </Link>
                   );

@@ -1,11 +1,25 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "./auth.store";
 import { authService } from "./auth.service";
 import type { LoginFormData, RegisterFormData } from "./auth.schema";
-import { UserRole, type User, mapUserDtoToUser } from "./auth.types";
+import { type User, type UserDto, type TeamDto, mapUserDtoToUser } from "./auth.types";
 import { useToast } from "@/shared/ui/components/shared/toast";
 
+// ============================================================
+// Query Keys
+// ============================================================
+export const authKeys = {
+  all: ["auth"] as const,
+  users: () => [...authKeys.all, "users"] as const,
+  teams: () => [...authKeys.all, "teams"] as const,
+  profile: () => [...authKeys.all, "profile"] as const,
+};
+
+// ============================================================
+// Login (manual mutation — sets auth state)
+// ============================================================
 export function useLogin() {
   const router = useRouter();
   const setAuth = useAuthStore((s) => s.setAuth);
@@ -40,6 +54,9 @@ export function useLogin() {
   };
 }
 
+// ============================================================
+// Register (manual mutation)
+// ============================================================
 export function useRegister() {
   const router = useRouter();
   const { addToast } = useToast();
@@ -78,57 +95,101 @@ export function useRegister() {
   };
 }
 
+// ============================================================
+// Users (React Query)
+// ============================================================
 export function useUsers() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const queryClient = useQueryClient();
   const { addToast } = useToast();
 
-  const fetchUsers = async () => {
-    setIsLoading(true);
-    try {
-      const userDtos = await authService.getUsers();
-      const mapped = userDtos.map(mapUserDtoToUser);
-      setUsers(mapped);
-    } catch {
-      addToast({
-        type: "error",
-        title: "Lỗi tải danh sách người dùng",
-        description: "Không thể kết nối tới máy chủ.",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { data: userDtos = [], isLoading } = useQuery<UserDto[]>({
+    queryKey: authKeys.users(),
+    queryFn: () => authService.getUsers(),
+  });
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  const users: User[] = userDtos.map(mapUserDtoToUser);
 
-  const assignUser = async (userId: string, role: UserRole, teamId?: string | null) => {
-    try {
-      const response = await authService.assignUser({ userId, role, teamId });
+  const assignUserMutation = useMutation({
+    mutationFn: (params: { userId: string; role?: number | null; teamId?: string | null }) =>
+      authService.assignUser(params),
+    onSuccess: (response) => {
       addToast({
         type: "success",
         title: "Cập nhật quyền thành công",
         description: response.message || "Đã lưu thay đổi.",
       });
-      await fetchUsers();
-      return true;
-    } catch (err: any) {
+      queryClient.invalidateQueries({ queryKey: authKeys.users() });
+    },
+    onError: (err: any) => {
       addToast({
         type: "error",
         title: "Cập nhật quyền thất bại",
         description: err.message || "Đã xảy ra lỗi.",
       });
+    },
+  });
+
+  const removeTeamMutation = useMutation({
+    mutationFn: (userId: string) =>
+      authService.removeUserTeam({ userId }),
+    onSuccess: (response) => {
+      addToast({
+        type: "success",
+        title: "Gỡ nhóm thành công",
+        description: response.message || "Người dùng đã được gỡ khỏi nhóm.",
+      });
+      queryClient.invalidateQueries({ queryKey: authKeys.users() });
+    },
+    onError: (err: any) => {
+      addToast({
+        type: "error",
+        title: "Gỡ nhóm thất bại",
+        description: err.message || "Đã xảy ra lỗi.",
+      });
+    },
+  });
+
+  const assignUser = async (userId: string, role?: number | null, teamId?: string | null) => {
+    try {
+      await assignUserMutation.mutateAsync({ userId, role, teamId });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const removeUserTeam = async (userId: string) => {
+    try {
+      await removeTeamMutation.mutateAsync(userId);
+      return true;
+    } catch {
       return false;
     }
   };
 
   return {
     users,
+    userDtos,
     isLoading,
-    refresh: fetchUsers,
+    refresh: () => queryClient.invalidateQueries({ queryKey: authKeys.users() }),
     assignUser,
+    removeUserTeam,
   };
 }
+
+// ============================================================
+// Teams (React Query)
+// ============================================================
+export function useTeams() {
+  const { data: teams = [], isLoading } = useQuery<TeamDto[]>({
+    queryKey: authKeys.teams(),
+    queryFn: () => authService.getTeams(),
+  });
+
+  return {
+    teams,
+    isLoading,
+  };
+}
+
 

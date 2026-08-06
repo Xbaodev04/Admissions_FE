@@ -1,103 +1,45 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/components/ui/card";
 import { KpiCard } from "@/shared/ui/components/shared/kpi-card";
-import { BarChart3, PieChart, Users, TrendingUp, AlertTriangle } from "lucide-react";
+import { Button } from "@/shared/ui/components/ui/button";
+import { BarChart3, PieChart, Users, TrendingUp, AlertTriangle, Phone } from "lucide-react";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { UserRole } from "@/features/auth/auth.types";
-import { assignmentService } from "@/features/assignments/assignment.service";
-import type { AssignmentReportDto } from "@/features/assignments/assignment.types";
-import { useToast } from "@/shared/ui/components/shared/toast";
+import { useAssignmentReport, useActiveSla } from "@/features/assignments/assignment.hooks";
 
 export default function AssignmentReportPage() {
-  const { addToast } = useToast();
   const user = useAuthStore((s) => s.user);
-  const isManager = user?.role === UserRole.Manager || user?.role === UserRole.Admin;
-  const [reports, setReports] = useState<AssignmentReportDto[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const isAdmin = user?.role === UserRole.Admin;
 
-  useEffect(() => {
-    if (!isManager) {
-      // Consultants are unauthorized to fetch system-wide report; show personal simulated report instead
-      const personalMock: AssignmentReportDto[] = [
-        {
-          consultantId: user?.id || "c1",
-          consultantName: user?.fullName || user?.userName || "Bạn",
-          totalAssigned: 35,
-          slaFulfilled: 31,
-          slaViolated: 4,
-          pending: 0,
-        }
-      ];
-      setReports(personalMock);
-      setIsLoading(false);
-      return;
-    }
+  const fromDate = useMemo(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(), []);
+  const toDate = useMemo(() => new Date().toISOString(), []);
 
-    const fetchReport = async () => {
-      try {
-        const fromDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
-        const toDate = new Date().toISOString();
-        const data = await assignmentService.getReport(fromDate, toDate);
-        setReports(data);
-      } catch (error: any) {
-        console.error("Failed to fetch reports:", error.message || error);
-        
-        // Populate fallback data if backend is offline or returns error
-        const fallbackData: AssignmentReportDto[] = [
-          {
-            consultantId: user?.id || "c1",
-            consultantName: user?.fullName || user?.userName || "Bạn",
-            totalAssigned: 35,
-            slaFulfilled: 31,
-            slaViolated: 4,
-            pending: 0,
-          },
-          {
-            consultantId: "c2",
-            consultantName: "Nguyễn Văn A",
-            totalAssigned: 45,
-            slaFulfilled: 40,
-            slaViolated: 5,
-            pending: 0,
-          },
-          {
-            consultantId: "c3",
-            consultantName: "Trần Thị B",
-            totalAssigned: 28,
-            slaFulfilled: 22,
-            slaViolated: 6,
-            pending: 0,
-          },
-        ];
-        setReports(fallbackData);
-        addToast({
-          type: "info",
-          title: "Đang hiển thị dữ liệu mô phỏng",
-          description: "Không thể kết nối đến máy chủ báo cáo. Đang tải dữ liệu mẫu.",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchReport();
-  }, [user, addToast, isManager]);
+  // Fetch using React Query
+  const { data: reports = [], isLoading, isError } = useAssignmentReport(fromDate, toDate);
+  const { data: allActiveSla = [] } = useActiveSla();
+  const myActiveLeads = useMemo(() => {
+    return allActiveSla.filter((s) => s.assigneeId === user?.id);
+  }, [allActiveSla, user]);
 
   // Filter or aggregate reports based on role
-  const myReport = reports.find((r) => r.consultantId === user?.id) || {
-    consultantId: user?.id || "",
-    consultantName: user?.name || "Bạn",
-    totalAssigned: 0,
-    slaFulfilled: 0,
-    slaViolated: 0,
-    pending: 0,
-  };
+  const myReport = useMemo(() => {
+    return reports.find((r) => r.consultantId === user?.id) || {
+      consultantId: user?.id || "",
+      consultantName: user?.name || "Bạn",
+      totalAssigned: 0,
+      slaFulfilled: 0,
+      slaViolated: 0,
+      pending: 0,
+    };
+  }, [reports, user]);
 
-  const totalAssigned = isManager ? reports.reduce((acc, r) => acc + r.totalAssigned, 0) : myReport.totalAssigned;
-  const slaFulfilled = isManager ? reports.reduce((acc, r) => acc + r.slaFulfilled, 0) : myReport.slaFulfilled;
-  const slaViolated = isManager ? reports.reduce((acc, r) => acc + r.slaViolated, 0) : myReport.slaViolated;
-  const pending = isManager ? reports.reduce((acc, r) => acc + r.pending, 0) : myReport.pending;
+  const totalAssigned = isAdmin ? reports.reduce((acc, r) => acc + r.totalAssigned, 0) : myReport.totalAssigned;
+  const slaFulfilled = isAdmin ? reports.reduce((acc, r) => acc + r.slaFulfilled, 0) : myReport.slaFulfilled;
+  const slaViolated = isAdmin ? reports.reduce((acc, r) => acc + r.slaViolated, 0) : myReport.slaViolated;
+  const pending = isAdmin ? reports.reduce((acc, r) => acc + r.pending, 0) : myReport.pending;
 
   const fulfillmentRate = totalAssigned > 0 ? Math.round((slaFulfilled / totalAssigned) * 100) : 0;
 
@@ -123,14 +65,14 @@ export default function AssignmentReportPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard title={isManager ? "Tổng Lead đã giao" : "Lead được giao (Của tôi)"} value={totalAssigned} icon={Users} variant="cyan" />
+        <KpiCard title={isAdmin ? "Tổng Lead đã giao" : "Lead được giao (Của tôi)"} value={totalAssigned} icon={Users} variant="cyan" />
         <KpiCard title="Đúng hạn SLA" value={slaFulfilled} icon={TrendingUp} variant="emerald" />
         <KpiCard title="Vi phạm SLA" value={slaViolated} icon={AlertTriangle} variant="rose" />
         <KpiCard title="Đang chờ xử lý" value={pending} icon={PieChart} variant="amber" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {isManager ? (
+        {isAdmin ? (
           <>
             <Card>
               <CardHeader>
@@ -194,7 +136,7 @@ export default function AssignmentReportPage() {
             </Card>
           </>
         ) : (
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Hiệu suất xử lý SLA (Cá nhân)</CardTitle>
@@ -216,6 +158,67 @@ export default function AssignmentReportPage() {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Users className="h-5 w-5 text-cyan-400" />
+                  Danh sách khách hàng cần liên hệ (SLA đang chạy)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {myActiveLeads.length === 0 ? (
+                  <p className="text-sm text-slate-500 py-8 text-center">
+                    Hiện tại bạn không có khách hàng nào cần liên hệ gấp.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-400 uppercase">
+                          <th className="py-3 px-4">Tên khách hàng</th>
+                          <th className="py-3 px-4">Hệ đào tạo</th>
+                          <th className="py-3 px-4">Thời gian nhận</th>
+                          <th className="py-3 px-4">SLA còn lại</th>
+                          <th className="py-3 px-4 text-right">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {myActiveLeads.map((lead) => {
+                          const isWarning = lead.remainingMinutes <= 10;
+                          return (
+                            <tr key={lead.id} className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-900/50 text-sm">
+                              <td className="py-3.5 px-4 font-medium text-slate-900 dark:text-white">
+                                {lead.customerName || "Ẩn danh"}
+                              </td>
+                              <td className="py-3.5 px-4 text-slate-500">
+                                {lead.trainingSystem === "2" || lead.trainingSystem?.toLowerCase().includes("formal") ? "Chính quy" : lead.trainingSystem === "3" || lead.trainingSystem?.toLowerCase().includes("driving") ? "Lái xe" : "Sơ cấp"}
+                              </td>
+                              <td className="py-3.5 px-4 text-slate-500">
+                                {new Date(lead.assignedAt).toLocaleTimeString()} {new Date(lead.assignedAt).toLocaleDateString()}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${isWarning ? "bg-rose-500/10 text-rose-500" : "bg-emerald-500/10 text-emerald-500"}`}>
+                                  {lead.remainingMinutes} phút {lead.isViolated && "(Quá hạn)"}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-right">
+                                <Link href={`/evidence?customerId=${lead.customerId}`}>
+                                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5">
+                                    <Phone className="h-3.5 w-3.5" />
+                                    Liên hệ & Upload
+                                  </Button>
+                                </Link>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

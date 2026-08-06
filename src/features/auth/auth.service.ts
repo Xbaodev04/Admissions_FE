@@ -4,7 +4,10 @@ import type {
   RegisterRequest,
   AssignUserCommand,
   AssignUserResponse,
+  RemoveUserTeamCommand,
+  RemoveUserTeamResponse,
   UserDto,
+  TeamDto,
   User,
   AuthResponse,
   RegisterResponse,
@@ -55,8 +58,18 @@ export const authService = {
     return response.data;
   },
 
+  async getTeams(): Promise<TeamDto[]> {
+    const response = await apiClient.get<TeamDto[]>("/api/Auth/teams");
+    return response.data;
+  },
+
   async assignUser(data: AssignUserCommand): Promise<AssignUserResponse> {
     const response = await apiClient.post<AssignUserResponse>("/api/Auth/assign-user", data);
+    return response.data;
+  },
+
+  async removeUserTeam(data: RemoveUserTeamCommand): Promise<RemoveUserTeamResponse> {
+    const response = await apiClient.post<RemoveUserTeamResponse>("/api/Auth/remove-team", data);
     return response.data;
   },
 
@@ -65,4 +78,5 @@ export const authService = {
     await this.assignUser(data);
   },
 };
+
 

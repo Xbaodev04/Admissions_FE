@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuthStore } from "@/features/auth/auth.store";
+import { useActiveSla } from "@/features/assignments/assignment.hooks";
 import { KpiCard } from "@/shared/ui/components/shared/kpi-card";
 import { StatusBadge } from "@/shared/ui/components/shared/status-badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/shared/ui/components/ui/card";
@@ -8,11 +9,12 @@ import { Badge } from "@/shared/ui/components/ui/badge";
 import { Button } from "@/shared/ui/components/ui/button";
 import { Avatar } from "@/shared/ui/components/ui/avatar";
 import type { ActivityItem, Assignment } from "@/features/assignments/assignment.types";
-import { formatDateTime, maskPhone } from "@/shared/utils/utils";
+import { formatDateTime } from "@/shared/utils/utils";
 import { canAccessAdmin } from "@/features/auth/auth.types";
+import type { AssignmentStatus } from "@/shared/types/common";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
   Users,
   Timer,
@@ -45,6 +47,12 @@ export default function DashboardPage() {
   const isManager = user ? canAccessAdmin(user.role) : false;
   const router = useRouter();
 
+  // Fetch real data from API (Unconditional, top of the component)
+  const { data: allSla = [] } = useActiveSla();
+  const { data: formalSla = [] } = useActiveSla(2);
+  const { data: shorttermSla = [] } = useActiveSla(1);
+  const { data: drivingSla = [] } = useActiveSla(3);
+
   useEffect(() => {
     if (user && !isManager) {
       router.replace("/reports/assignment");
@@ -55,22 +63,58 @@ export default function DashboardPage() {
     return null; // or a loading spinner, but null is fine to prevent flash
   }
 
-  const [stats] = useState({
-    totalLeads: 0,
+  const overdueSla = allSla.filter((s) => s.isViolated).length;
+  const activeSla = allSla.filter((s) => !s.isViolated).length;
+  const totalLeads = allSla.length;
+  const unassignedLeads = 0; // Backend has no direct endpoint for unassigned count
+
+  const stats = {
+    totalLeads,
     leadsTrend: 0,
-    activeSla: 0,
+    activeSla,
     slaTrend: 0,
-    overdueSla: 0,
+    overdueSla,
     overdueTrend: 0,
-    unassignedLeads: 0,
+    unassignedLeads,
     unassignedTrend: 0,
-    formalLeads: 0,
-    drivingLeads: 0,
-    shorttermLeads: 0,
-  });
-  
-  const [activities] = useState<ActivityItem[]>([]);
-  const [assignments] = useState<Assignment[]>([]);
+    formalLeads: formalSla.length,
+    drivingLeads: drivingSla.length,
+    shorttermLeads: shorttermSla.length,
+  };
+
+  const getBranchKey = (sys?: string | null): string => {
+    if (!sys) return "formal";
+    const s = sys.toString().toLowerCase();
+    if (s === "2" || s.includes("formal") || s.includes("chính quy")) return "formal";
+    if (s === "3" || s.includes("driving") || s.includes("lái xe")) return "driving";
+    if (s === "1" || s.includes("shortterm") || s.includes("ngắn hạn")) return "shortterm";
+    return "formal";
+  };
+
+  const activities: ActivityItem[] = allSla
+    .map((sla) => ({
+      id: `act-${sla.id}`,
+      type: (sla.isViolated ? "sla_warning" : "lead_assigned") as "lead_assigned" | "sla_warning",
+      message: sla.isViolated
+        ? `vi phạm SLA phản hồi cho khách hàng ${sla.customerName || "Ẩn danh"}`
+        : `được phân bổ cho ${sla.assigneeName || "Tư vấn viên"}`,
+      user: sla.isViolated ? (sla.assigneeName || "Tư vấn viên") : (sla.customerName || "Khách hàng"),
+      timestamp: sla.assignedAt,
+    }))
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  const assignments: Assignment[] = allSla
+    .map((sla) => ({
+      id: sla.id,
+      customerId: sla.customerId,
+      customerName: sla.customerName || "Khách hàng",
+      consultantId: sla.assigneeId,
+      consultantName: sla.assigneeName || "Tư vấn viên",
+      branch: getBranchKey(sla.trainingSystem),
+      status: (sla.isViolated ? "expired" : "pending") as AssignmentStatus,
+      assignedAt: sla.assignedAt,
+    }))
+    .sort((a, b) => new Date(b.assignedAt).getTime() - new Date(a.assignedAt).getTime());
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -248,27 +292,33 @@ export default function DashboardPage() {
           </h2>
           <Card>
             <CardContent className="p-4 space-y-3">
-              {activities.slice(0, 5).map((activity) => (
-                <div
-                  key={activity.id}
-                  className="flex items-start gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                >
-                  <div className="mt-0.5 flex-shrink-0">
-                    {ACTIVITY_ICONS[activity.type]}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-slate-600 dark:text-slate-300">
-                      <span className="font-medium text-slate-800 dark:text-slate-200">
-                        {activity.user}
-                      </span>{" "}
-                      {activity.message}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {formatDateTime(activity.timestamp)}
-                    </p>
-                  </div>
+              {activities.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground text-sm">
+                  Không có hoạt động nào gần đây.
                 </div>
-              ))}
+              ) : (
+                activities.slice(0, 5).map((activity) => (
+                  <div
+                    key={activity.id}
+                    className="flex items-start gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                  >
+                    <div className="mt-0.5 flex-shrink-0">
+                      {ACTIVITY_ICONS[activity.type]}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-slate-600 dark:text-slate-300">
+                        <span className="font-medium text-slate-800 dark:text-slate-200">
+                          {activity.user}
+                        </span>{" "}
+                        {activity.message}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {formatDateTime(activity.timestamp)}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
         </div>
@@ -312,47 +362,55 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {assignments.slice(0, 5).map((assignment) => (
-                  <tr
-                    key={assignment.id}
-                    className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors"
-                  >
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={assignment.customerName} size="sm" />
-                        <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                          {assignment.customerName}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-slate-600 dark:text-slate-300">
-                      {assignment.consultantName}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <Badge
-                        variant={
-                          assignment.branch === "formal"
-                            ? "cyan"
-                            : assignment.branch === "driving"
-                            ? "warning"
-                            : "success"
-                        }
-                      >
-                        {assignment.branch === "formal"
-                          ? "Chính quy"
-                          : assignment.branch === "driving"
-                          ? "Lái xe"
-                          : "Ngắn hạn"}
-                      </Badge>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <StatusBadge status={assignment.status} />
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-muted-foreground">
-                      {formatDateTime(assignment.assignedAt)}
+                {assignments.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-6 text-center text-sm text-muted-foreground">
+                      Không có lượt phân bổ nào gần đây.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  assignments.slice(0, 5).map((assignment) => (
+                    <tr
+                      key={assignment.id}
+                      className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors"
+                    >
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={assignment.customerName} size="sm" />
+                          <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                            {assignment.customerName}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-slate-600 dark:text-slate-300">
+                        {assignment.consultantName}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <Badge
+                          variant={
+                            assignment.branch === "formal"
+                              ? "cyan"
+                              : assignment.branch === "driving"
+                              ? "warning"
+                              : "success"
+                          }
+                        >
+                          {assignment.branch === "formal"
+                            ? "Chính quy"
+                            : assignment.branch === "driving"
+                            ? "Lái xe"
+                            : "Ngắn hạn"}
+                        </Badge>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <StatusBadge status={assignment.status} />
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-muted-foreground">
+                        {formatDateTime(assignment.assignedAt)}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

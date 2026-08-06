@@ -23,8 +23,9 @@ export const assignmentService = {
     await apiClient.post("/api/Assignment/manual-assign", data);
   },
 
+  // TODO(backend): Endpoint PUT /api/Assignment/config/sla chưa tồn tại ở backend
   async updateSlaConfig(data: UpdateSlaConfigCommand): Promise<void> {
-    await apiClient.put("/api/Assignment/config/sla", data);
+    throw new Error("API chưa sẵn sàng: Backend chưa hỗ trợ cập nhật cấu hình SLA.");
   },
 
   async getReport(fromDate?: string, toDate?: string): Promise<AssignmentReportDto[]> {

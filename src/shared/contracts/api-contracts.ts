@@ -1,380 +1,297 @@
-export type UUID = string;
-export type DateTimeString = string;
+// ============================================================
+// Shared Contracts — Mirrors backend C# Enums & DTOs
+// ============================================================
 
-export type JsonSchema = {
-  type?: "object" | "string" | "integer" | "number" | "boolean" | "array" | "null";
-  format?: string;
-  $ref?: string;
-  nullable?: boolean;
-  additionalProperties?: boolean;
-  description?: string;
-  properties?: Record<string, JsonSchema>;
-  required?: string[];
-  items?: JsonSchema;
-  enum?: readonly (string | number)[];
-  anyOf?: readonly JsonSchema[];
-  oneOf?: readonly JsonSchema[];
+// --- Shared.Contracts.Enums ---
+
+export enum TrainingSystem {
+  ShortTerm = 1,  // Sơ cấp
+  Formal = 2,     // Chính quy
+  Driving = 3,    // Lái xe
+}
+
+export const TRAINING_SYSTEM_LABELS: Record<TrainingSystem, string> = {
+  [TrainingSystem.ShortTerm]: "Sơ cấp",
+  [TrainingSystem.Formal]: "Chính quy",
+  [TrainingSystem.Driving]: "Lái xe",
 };
 
-export const TrainingSystem = {
-  ShortTerm: 1,
-  Formal: 2,
-  Driving: 3,
-  TechnicalSkills: 4,
-} as const;
+// --- Customer.Domain.Enums ---
 
-export type TrainingSystem = (typeof TrainingSystem)[keyof typeof TrainingSystem];
+export enum Source {
+  Website = 1,
+  Facebook = 2,
+  Banner = 3,
+  TayDo = 4,
+  Reference = 5,
+  Zalo = 6,
+  ZaloMini = 7,
+  ImportFile = 8,
+  DataEntry = 9,
+  Military = 10,
+  Hotline = 11,
+  PersonalCustomer = 12,
+  Affiliate = 13,
+  LearnerDriver = 14,
+  GoogleAds = 15,
+  TikTok = 16,
+}
 
-export const Source = {
-  Website: 1,
-  Facebook: 2,
-  Banner: 3,
-  TayDo: 4,
-  Reference: 5,
-  Zalo: 6,
-  ZaloMini: 7,
-  ImportFile: 8,
-  DataEntry: 9,
-  Military: 10,
-  Hotline: 11,
-  PersonalCustomer: 12,
-  Affiliate: 13,
-  LearnerDriver: 14,
-  GoogleAds: 15,
-  TikTok: 16,
-} as const;
-
-export type Source = (typeof Source)[keyof typeof Source];
-
-export const EducationLevel = {
-  UnderSecondarySchool: 1,
-  SecondarySchool: 2,
-  HighSchool: 3,
-  Intermediate: 4,
-  College: 5,
-  Undergraduate: 6,
-  Graduate: 7,
-  DrivingTraining: 8,
-} as const;
-
-export type EducationLevel = (typeof EducationLevel)[keyof typeof EducationLevel];
-
-export const ContactEvidenceType = {
-  CallRecording: 1,
-  StatusChange: 2,
-  Note: 3,
-  Meeting: 4,
-  ZaloMessage: 5,
-  FacebookMessage: 6,
-} as const;
-
-export type ContactEvidenceType = (typeof ContactEvidenceType)[keyof typeof ContactEvidenceType];
-
-export const AssignmentReason = {
-  NewLead: 1,
-  ManualAssign: 2,
-  SlaViolation: 3,
-  Rebalance: 4,
-} as const;
-
-export type AssignmentReason = (typeof AssignmentReason)[keyof typeof AssignmentReason];
-
-// Note: Role is intentionally omitted here as requested by user to keep existing UI logic intact.
-
-export type CreateCustomerCommand = {
-  name?: string;
-  email?: string;
-  mobile?: string;
-  studentId?: string | null;
-  source?: Source | null;
-  birthDate?: DateTimeString | null;
-  gender?: string | null;
-  address?: string | null;
-  trainingSystem: TrainingSystem;
-  educationLevel?: EducationLevel | null;
-  placeOfBirth?: string | null;
-  latestSchool?: string | null;
-  onlineMessageMobile?: string | null;
-  ethnic?: string | null;
-  schoolAddress?: string | null;
-  userIdByOa?: string | null;
-  parentMobile?: string | null;
-  cccd?: string | null;
-  cccdIssueDate?: DateTimeString | null;
-  fatherName?: string | null;
-  motherName?: string | null;
-  graduationYear?: number | null;
-  createdBy: UUID;
+export const SOURCE_LABELS: Record<Source, string> = {
+  [Source.Website]: "Tìm kiếm trên Google/Website",
+  [Source.Facebook]: "Facebook",
+  [Source.Banner]: "Bảng quảng cáo",
+  [Source.TayDo]: "Đã từng học tại trường Tây Đô",
+  [Source.Reference]: "Người quen giới thiệu",
+  [Source.Zalo]: "Zalo",
+  [Source.ZaloMini]: "Zalo Game mini app",
+  [Source.ImportFile]: "Hướng nghiệp trường",
+  [Source.DataEntry]: "Nhập liệu",
+  [Source.Military]: "Bộ đội xuất ngũ",
+  [Source.Hotline]: "Hotline",
+  [Source.PersonalCustomer]: "KH Cá nhân",
+  [Source.Affiliate]: "Affiliate",
+  [Source.LearnerDriver]: "Học viên trường lái",
+  [Source.GoogleAds]: "Google Ads",
+  [Source.TikTok]: "TikTok",
 };
 
-export type AssignCustomerCommand = {
-  customerId: UUID;
-  assigneeId: UUID;
-  assignedById: UUID;
-  note?: string | null;
+export enum LeadStatus {
+  New = 1,
+  Will = 2,
+  WrongNumber = 3,
+  NotIdentified = 4,
+  Cold = 5,
+  Warm = 6,
+  Hot = 7,
+  Profiled = 8,
+  Deposited = 9,
+  Paid = 10,
+  ProfileCanceled = 11,
+  Withdrawn = 12,
+  CanceledDeposit = 13,
+  Lost = 14,
+}
+
+export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
+  [LeadStatus.New]: "Chưa liên hệ / Không nghe / Hẹn lại",
+  [LeadStatus.Will]: "Sẽ quan tâm",
+  [LeadStatus.WrongNumber]: "Sai / Nhầm số",
+  [LeadStatus.NotIdentified]: "Không liên lạc được",
+  [LeadStatus.Cold]: "Lạnh nhạt / Khó chịu",
+  [LeadStatus.Warm]: "Quan tâm",
+  [LeadStatus.Hot]: "Rất quan tâm",
+  [LeadStatus.Profiled]: "Đã đăng ký",
+  [LeadStatus.Deposited]: "Đã đóng cọc",
+  [LeadStatus.Paid]: "Đã đóng học phí",
+  [LeadStatus.ProfileCanceled]: "Đã hủy đăng ký",
+  [LeadStatus.Withdrawn]: "Đã rút hồ sơ / Hoàn phí",
+  [LeadStatus.CanceledDeposit]: "Hủy cọc",
+  [LeadStatus.Lost]: "Khách hàng không còn quan tâm hoặc từ chối",
 };
 
-export type CreateContactEvidenceCommand = {
-  customerId: UUID;
-  consultantId: UUID;
-  type: ContactEvidenceType;
-  fileUrl?: string | null;
-  description?: string | null;
-  durationSeconds?: number | null;
-  oldStatusValue?: string | null;
-  newStatusValue?: string | null;
+export enum FollowStatus {
+  Will = 1,
+  Warm = 2,
+  Hot = 3,
+  Lost = 4,
+}
+
+export const FOLLOW_STATUS_LABELS: Record<FollowStatus, string> = {
+  [FollowStatus.Will]: "Đã tư vấn hết kịch bản, xin kết bạn Zalo",
+  [FollowStatus.Warm]: "Đã tư vấn hết kịch bản, có quan tâm",
+  [FollowStatus.Hot]: "Rất quan tâm, đã tư vấn đầy đủ thông tin, có ý định đăng ký học",
+  [FollowStatus.Lost]: "Khách hàng không còn quan tâm hoặc từ chối",
 };
 
-export type QueueStatusItem = {
-  id: UUID;
+export enum EducationLevel {
+  UnderSecondarySchool = 1,
+  SecondarySchool = 2,
+  HighSchool = 3,
+  Intermediate = 4,
+  College = 5,
+  Undergraduate = 6,
+  Graduate = 7,
+  DrivingTraining = 8,
+}
+
+export const EDUCATION_LEVEL_LABELS: Record<EducationLevel, string> = {
+  [EducationLevel.UnderSecondarySchool]: "Chưa tốt nghiệp THCS",
+  [EducationLevel.SecondarySchool]: "Tốt nghiệp THCS",
+  [EducationLevel.HighSchool]: "Tốt nghiệp THPT",
+  [EducationLevel.Intermediate]: "Trung Cấp/Chứng chỉ nghề",
+  [EducationLevel.College]: "Cao đẳng",
+  [EducationLevel.Undergraduate]: "Đại học",
+  [EducationLevel.Graduate]: "Sau đại học",
+  [EducationLevel.DrivingTraining]: "Đào tạo lái xe",
+};
+
+export enum CustomerStatus {
+  Interest = 1,
+  Profile = 2,
+  Registered = 3,
+  Paid = 4,
+  Withdraw = 5,
+  AwaitingProcess = 6,
+  Canceled = 7,
+  CanceledDeposit = 8,
+}
+
+export const CUSTOMER_STATUS_LABELS: Record<CustomerStatus, string> = {
+  [CustomerStatus.Interest]: "Quan tâm",
+  [CustomerStatus.Profile]: "Đã đăng ký xét tuyển",
+  [CustomerStatus.Registered]: "Đã đóng cọc",
+  [CustomerStatus.Paid]: "Đã đóng học phí",
+  [CustomerStatus.Withdraw]: "Hủy học phí",
+  [CustomerStatus.AwaitingProcess]: "Chờ xử lý",
+  [CustomerStatus.Canceled]: "Đã hủy đăng ký",
+  [CustomerStatus.CanceledDeposit]: "Đã hủy cọc",
+};
+
+// --- LeadAssignment.Domain.Enums ---
+
+export enum AssignmentReason {
+  AutoAssign = 0,
+  ManualAssign = 1,
+  SlaViolation = 2,
+}
+
+export const ASSIGNMENT_REASON_LABELS: Record<AssignmentReason, string> = {
+  [AssignmentReason.AutoAssign]: "Tự động phân bổ",
+  [AssignmentReason.ManualAssign]: "Giao thủ công",
+  [AssignmentReason.SlaViolation]: "Vi phạm SLA",
+};
+
+// Placeholder enum for evidence types (backend uses string-based approach)
+export enum ContactEvidenceType {
+  Call = 1,
+  Email = 2,
+  Meeting = 3,
+  Document = 4,
+  Note = 5,
+}
+
+export const CONTACT_EVIDENCE_TYPE_LABELS: Record<ContactEvidenceType, string> = {
+  [ContactEvidenceType.Call]: "Cuộc gọi",
+  [ContactEvidenceType.Email]: "Email",
+  [ContactEvidenceType.Meeting]: "Gặp mặt",
+  [ContactEvidenceType.Document]: "Tài liệu",
+  [ContactEvidenceType.Note]: "Ghi chú",
+};
+
+// ============================================================
+// DTOs — Matching backend query response shapes
+// ============================================================
+
+export interface QueueStatusItem {
+  id: string;
+  trainingSystem: string;
+  consultantId: string;
   consultantName: string;
-  consultantId: UUID;
   orderIndex: number;
   currentLoad: number;
   maxLoad: number;
   isActive: boolean;
-  lastAssignedAt: DateTimeString | null;
-};
+  lastAssignedAt: string | null;
+}
 
-export type ActiveSlaItem = {
-  id: UUID;
+export interface ActiveSlaItem {
+  id: string;
+  customerId: string;
   customerName: string;
-  customerId: UUID;
+  trainingSystem: string;
+  assigneeId: string;
   assigneeName: string;
-  assigneeId: UUID;
-  assignedAt: DateTimeString;
-  deadline: DateTimeString;
+  assignedAt: string;
+  deadline: string;
   remainingMinutes: number;
   isViolated: boolean;
-};
+}
 
-export type AssignmentHistoryItem = {
-  id: UUID;
+export interface AssignmentHistoryItem {
+  id: string;
+  assigneeId: string;
   assigneeName: string;
-  assignedByName: string;
-  assignmentDate: DateTimeString;
-  reason: AssignmentReason;
-  note?: string | null;
-};
+  assignedById: string;
+  assignmentDate: string;
+  reason: string | null;
+  note: string | null;
+}
 
-export type ContactEvidenceItem = {
-  id: UUID;
-  consultantName: string;
-  type: ContactEvidenceType;
+export interface ContactEvidenceItem {
+  id: string;
+  customerId: string;
+  customerName: string;
+  trainingSystem: TrainingSystem | null;
+  assigneeId: string | null;
+  status: LeadStatus | null;
+  followStatus: FollowStatus | null;
+  statusDate: string | null;
+  reportDate: string | null;
+  note: string | null;
+}
+
+// ============================================================
+// Commands — Matching backend command request shapes
+// ============================================================
+
+export interface CreateCustomerCommand {
+  customerId?: string;
+  fullName: string;
+  mobile?: string | null;
+  source: number;
+}
+
+export interface AssignCustomerCommand {
+  customerId: string;
+  assigneeId: string;
+  assignedById: string;
+  note?: string | null;
+}
+
+export interface CreateContactEvidenceCommand {
+  customerId: string;
+  consultantId: string;
   fileUrl?: string | null;
   description?: string | null;
   durationSeconds?: number | null;
-  oldStatusValue?: string | null;
-  newStatusValue?: string | null;
-  createdAt: DateTimeString;
-};
+  leadStatus: number;
+  followStatus: number;
+}
 
-export type CustomerCreatedEvent = {
-  customerId: UUID;
-  customerName: string;
-  mobile: string;
+// ============================================================
+// Events — For display/reference purposes
+// ============================================================
+
+export interface CustomerCreatedEvent {
+  customerId: string;
+  fullName: string;
+  mobile?: string;
+  source: Source;
   trainingSystem: TrainingSystem;
-  createdBy: UUID;
-  createdAt: DateTimeString;
-};
+}
 
-export type LeadAssignedEvent = {
-  customerId: UUID;
+export interface LeadAssignedEvent {
+  customerId: string;
   customerName: string;
-  assigneeId: UUID;
+  assigneeId: string;
   assigneeName: string;
-  assignedById: UUID;
+  assignedById: string;
   reason: AssignmentReason;
-  assignedAt: DateTimeString;
-  slaDeadline: DateTimeString;
-};
+  assignedAt: string;
+  slaDeadline: string;
+}
 
-export type ContactEvidenceSubmittedEvent = {
-  contactEvidenceId: UUID;
-  customerId: UUID;
-  consultantId: UUID;
-  evidenceType: string;
-  submittedAt: DateTimeString;
-};
+export interface ContactEvidenceSubmittedEvent {
+  customerId: string;
+  consultantId: string;
+  leadStatus: LeadStatus;
+  followStatus: FollowStatus;
+}
 
-export type SlaViolationEvent = {
-  customerId: UUID;
+export interface SlaViolationEvent {
+  customerId: string;
   customerName: string;
-  violatedAssigneeId: UUID;
-  violatedAssigneeName: string;
-  slaTrackingId: UUID;
-  assignedAt: DateTimeString;
-  deadline: DateTimeString;
-  violatedAt: DateTimeString;
-};
-
-export const schemas = {
-  TrainingSystem: { type: "integer", enum: [1, 2, 3, 4] },
-  Source: { type: "integer", enum: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] },
-  EducationLevel: { type: "integer", enum: [1, 2, 3, 4, 5, 6, 7, 8] },
-  ContactEvidenceType: { type: "integer", enum: [1, 2, 3, 4, 5, 6] },
-  AssignmentReason: { type: "integer", enum: [1, 2, 3, 4] },
-
-  CreateCustomerCommand: {
-    type: "object",
-    additionalProperties: false,
-    required: ["trainingSystem", "createdBy"],
-    properties: {
-      name: { type: "string", nullable: true },
-      email: { type: "string", nullable: true },
-      mobile: { type: "string", nullable: true },
-      studentId: { type: "string", nullable: true },
-      source: { anyOf: [{ $ref: "#/components/schemas/Source" } as JsonSchema, { type: "null" }] },
-      birthDate: { type: "string", format: "date-time", nullable: true },
-      gender: { type: "string", nullable: true },
-      address: { type: "string", nullable: true },
-      trainingSystem: { $ref: "#/components/schemas/TrainingSystem" },
-      educationLevel: { anyOf: [{ $ref: "#/components/schemas/EducationLevel" } as JsonSchema, { type: "null" }] },
-      placeOfBirth: { type: "string", nullable: true },
-      latestSchool: { type: "string", nullable: true },
-      onlineMessageMobile: { type: "string", nullable: true },
-      ethnic: { type: "string", nullable: true },
-      schoolAddress: { type: "string", nullable: true },
-      userIdByOa: { type: "string", nullable: true },
-      parentMobile: { type: "string", nullable: true },
-      cccd: { type: "string", nullable: true },
-      cccdIssueDate: { type: "string", format: "date-time", nullable: true },
-      fatherName: { type: "string", nullable: true },
-      motherName: { type: "string", nullable: true },
-      graduationYear: { type: "integer", format: "int32", nullable: true },
-      createdBy: { type: "string", format: "uuid" },
-    },
-  },
-
-  AssignCustomerCommand: {
-    type: "object",
-    additionalProperties: false,
-    required: ["customerId", "assigneeId", "assignedById"],
-    properties: {
-      customerId: { type: "string", format: "uuid" },
-      assigneeId: { type: "string", format: "uuid" },
-      assignedById: { type: "string", format: "uuid" },
-      note: { type: "string", nullable: true },
-    },
-  },
-
-  CreateContactEvidenceCommand: {
-    type: "object",
-    additionalProperties: false,
-    required: ["customerId", "consultantId", "type"],
-    properties: {
-      customerId: { type: "string", format: "uuid" },
-      consultantId: { type: "string", format: "uuid" },
-      type: { $ref: "#/components/schemas/ContactEvidenceType" },
-      fileUrl: { type: "string", nullable: true },
-      description: { type: "string", nullable: true },
-      durationSeconds: { type: "integer", format: "int32", nullable: true },
-      oldStatusValue: { type: "string", nullable: true },
-      newStatusValue: { type: "string", nullable: true },
-    },
-  },
-
-  QueueStatusItem: {
-    type: "object",
-    additionalProperties: false,
-    required: ["id", "consultantName", "consultantId", "orderIndex", "currentLoad", "maxLoad", "isActive"],
-    properties: {
-      id: { type: "string", format: "uuid" },
-      consultantName: { type: "string" },
-      consultantId: { type: "string", format: "uuid" },
-      orderIndex: { type: "integer", format: "int32" },
-      currentLoad: { type: "integer", format: "int32" },
-      maxLoad: { type: "integer", format: "int32" },
-      isActive: { type: "boolean" },
-      lastAssignedAt: { type: "string", format: "date-time", nullable: true },
-    },
-  },
-
-  ActiveSlaItem: {
-    type: "object",
-    additionalProperties: false,
-    required: ["id", "customerName", "customerId", "assigneeName", "assigneeId", "assignedAt", "deadline", "remainingMinutes", "isViolated"],
-    properties: {
-      id: { type: "string", format: "uuid" },
-      customerName: { type: "string" },
-      customerId: { type: "string", format: "uuid" },
-      assigneeName: { type: "string" },
-      assigneeId: { type: "string", format: "uuid" },
-      assignedAt: { type: "string", format: "date-time" },
-      deadline: { type: "string", format: "date-time" },
-      remainingMinutes: { type: "integer", format: "int32" },
-      isViolated: { type: "boolean" },
-    },
-  },
-
-  AssignmentHistoryItem: {
-    type: "object",
-    additionalProperties: false,
-    required: ["id", "assigneeName", "assignedByName", "assignmentDate", "reason"],
-    properties: {
-      id: { type: "string", format: "uuid" },
-      assigneeName: { type: "string" },
-      assignedByName: { type: "string" },
-      assignmentDate: { type: "string", format: "date-time" },
-      reason: { $ref: "#/components/schemas/AssignmentReason" },
-      note: { type: "string", nullable: true },
-    },
-  },
-
-  ContactEvidenceItem: {
-    type: "object",
-    additionalProperties: false,
-    required: ["id", "consultantName", "type", "createdAt"],
-    properties: {
-      id: { type: "string", format: "uuid" },
-      consultantName: { type: "string" },
-      type: { $ref: "#/components/schemas/ContactEvidenceType" },
-      fileUrl: { type: "string", nullable: true },
-      description: { type: "string", nullable: true },
-      durationSeconds: { type: "integer", format: "int32", nullable: true },
-      oldStatusValue: { type: "string", nullable: true },
-      newStatusValue: { type: "string", nullable: true },
-      createdAt: { type: "string", format: "date-time" },
-    },
-  },
-} as const satisfies Record<string, JsonSchema>;
-
-export const formalApiPaths = {
-  createCustomer: "/api/formal/Customers",
-} as const;
-
-export const shortTermApiPaths = {
-  createCustomer: "/api/shortterm/Customers",
-} as const;
-
-export const drivingApiPaths = {
-  createCustomer: "/api/driving/customer",
-  assignCustomer: "/api/driving/customer/assign",
-  queue: "/api/driving/assignment/queue",
-  activeSla: "/api/driving/assignment/sla/active",
-  assignmentHistory: (customerId: UUID) => `/api/driving/assignment/history/${customerId}`,
-  contactEvidenceHistory: (customerId: UUID) => `/api/driving/assignment/evidence/${customerId}`,
-  createContactEvidence: "/api/driving/contactevidence",
-} as const;
-
-export const assignmentApiPaths = {
-  checkIn: "/api/Assignment/check-in",
-  checkOut: "/api/Assignment/check-out",
-  manualAssign: "/api/Assignment/manual-assign",
-  updateSlaConfig: "/api/Assignment/config/sla",
-  report: "/api/Assignment/report",
-  history: (customerId: UUID) => `/api/Assignment/history/${customerId}`,
-  queue: "/api/Assignment/queue",
-  activeSla: "/api/Assignment/sla/active",
-  evidence: "/api/Assignment/evidence",
-  evidenceHistory: (customerId: UUID) => `/api/Assignment/evidence/${customerId}`,
-} as const;
-
-export const authApiPaths = {
-  register: "/api/Auth/register",
-  login: "/api/Auth/login",
-  assignUser: "/api/Auth/assign-user",
-  profile: "/api/Auth/profile",
-  users: "/api/Auth/users",
-  userById: (id: string) => `/api/Auth/users/${id}`,
-} as const;
+  assigneeId: string;
+  violatedAt: string;
+}

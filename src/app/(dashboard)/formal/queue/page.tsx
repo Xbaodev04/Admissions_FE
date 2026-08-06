@@ -1,50 +1,54 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/shared/ui/components/ui/card";
 import { Badge } from "@/shared/ui/components/ui/badge";
 import { Avatar } from "@/shared/ui/components/ui/avatar";
 import { EmptyState } from "@/shared/ui/components/shared/empty-state";
 import { formatDateTime } from "@/shared/utils/utils";
-import type { QueueStatusDto } from "@/features/assignments/assignment.types";
-import { assignmentService } from "@/features/assignments/assignment.service";
-import { useState, useEffect } from "react";
+import { useQueueStatus } from "@/features/assignments/assignment.hooks";
 import {
   ClipboardList,
   Clock,
-  UserCheck,
 } from "lucide-react";
 
+const TRAINING_SYSTEM_OPTIONS = [
+  { value: "", label: "Tất cả hệ đào tạo" },
+  { value: "2", label: "Chính quy (Formal)" },
+  { value: "1", label: "Sơ cấp (ShortTerm)" },
+  { value: "3", label: "Lái xe (Driving)" },
+];
+
 export default function QueuePage() {
-  const [queue, setQueue] = useState<QueueStatusDto[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [selectedSystem, setSelectedSystem] = useState<string>("2");
+  const trainingSystem = selectedSystem ? Number(selectedSystem) : undefined;
+  const { data: rawQueue = [], isLoading } = useQueueStatus(trainingSystem);
 
-  useEffect(() => {
-    const fetchQueue = async () => {
-      try {
-        const data = await assignmentService.getQueue(2); // 2 = Formal
-        // Sort queue by orderIndex
-        const sorted = data.sort((a, b) => a.orderIndex - b.orderIndex);
-        setQueue(sorted);
-      } catch (error) {
-        console.error("Failed to fetch queue:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchQueue();
-  }, []);
+  const queue = [...rawQueue].sort((a, b) => a.orderIndex - b.orderIndex);
 
   return (
     <div className="animate-fade-in">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-navy-100 flex items-center gap-2">
-          <ClipboardList className="h-5 w-5 text-cyan-400" />
-          Queue — Hàng đợi nhận Lead
-        </h1>
-        <p className="text-sm text-navy-400 mt-0.5">
-          Danh sách tư vấn viên đang xếp hàng đợi nhận Lead tự động
-        </p>
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-navy-100 flex items-center gap-2">
+            <ClipboardList className="h-5 w-5 text-cyan-400" />
+            Queue — Hàng đợi nhận Lead
+          </h1>
+          <p className="text-sm text-navy-400 mt-0.5">
+            Danh sách tư vấn viên đang xếp hàng đợi nhận Lead tự động
+          </p>
+        </div>
+        <select
+          className="h-10 rounded-md border border-navy-700/50 bg-navy-800/50 px-3 py-2 text-sm text-navy-100 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
+          value={selectedSystem}
+          onChange={(e) => setSelectedSystem(e.target.value)}
+        >
+          {TRAINING_SYSTEM_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value} className="bg-navy-900 text-navy-100">
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <Card>

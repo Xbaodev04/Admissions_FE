@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,6 +30,8 @@ import {
   Send,
 } from "lucide-react";
 import Link from "next/link";
+import { useAuthStore } from "@/features/auth/auth.store";
+import { RoleTeam } from "@/features/auth/auth.types";
 
 // Base validation schema shared by all branches
 const baseSchema = z.object({
@@ -104,6 +106,14 @@ export default function CreateLeadPage() {
   const branch = params.branch as string;
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const user = useAuthStore((s) => s.user);
+
+  useEffect(() => {
+    if (user?.roleTeam === RoleTeam.Formal) {
+      router.replace("/reports/assignment");
+    }
+  }, [user, router]);
+
   const branchLabel = BRANCH_LABELS[branch as Branch] || branch;
   const schema = schemaMap[branch] || baseSchema;
 
@@ -137,6 +147,15 @@ export default function CreateLeadPage() {
   };
 
   const onSubmit = async (_data: Record<string, unknown>) => {
+    if (branch === "driving") {
+      addToast({
+        type: "error",
+        title: "API chưa sẵn sàng",
+        description: "Hệ thống chưa hỗ trợ tạo Lead tự động cho hệ Lái xe (Driving).",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const payload = {
@@ -150,7 +169,7 @@ export default function CreateLeadPage() {
       } else if (branch === "shortterm") {
         await shorttermService.createCustomer(payload);
       } else {
-        throw new Error("Nhánh tuyển sinh không hỗ trợ API mới này.");
+        throw new Error("API chưa sẵn sàng: Nhánh tuyển sinh không hỗ trợ API mới này.");
       }
 
       addToast({
@@ -416,16 +435,23 @@ export default function CreateLeadPage() {
             )}
 
             {/* Submit */}
-            <div className="mt-6 flex items-center gap-3">
-              <Button type="submit" isLoading={isSubmitting} size="lg">
-                <Send className="h-4 w-4" />
-                Tạo Lead
-              </Button>
-              <Link href="/">
-                <Button variant="ghost" type="button">
-                  Hủy
+            <div className="mt-6 flex flex-col gap-3">
+              {branch === "driving" && (
+                <p className="text-sm font-semibold text-rose-500">
+                  ⚠️ Hệ thống Lái xe (Driving API) chưa sẵn sàng. Bạn không thể tạo lead tại thời điểm này.
+                </p>
+              )}
+              <div className="flex items-center gap-3">
+                <Button type="submit" isLoading={isSubmitting} size="lg" disabled={branch === "driving"}>
+                  <Send className="h-4 w-4" />
+                  {branch === "driving" ? "API chưa sẵn sàng" : "Tạo Lead"}
                 </Button>
-              </Link>
+                <Link href="/">
+                  <Button variant="ghost" type="button">
+                    Hủy
+                  </Button>
+                </Link>
+              </div>
             </div>
           </form>
         </div>

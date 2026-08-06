@@ -1,43 +1,65 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/shared/ui/components/ui/card";
 import { Badge } from "@/shared/ui/components/ui/badge";
 import { Button } from "@/shared/ui/components/ui/button";
 import { Avatar } from "@/shared/ui/components/ui/avatar";
+import { Input } from "@/shared/ui/components/ui/input";
 import { DataTable } from "@/shared/ui/components/shared/data-table";
 import { formatDateTime } from "@/shared/utils/utils";
-import type { CustomerAssignmentHistoryDto } from "@/features/assignments/assignment.types";
 import type { ColumnDef } from "@tanstack/react-table";
-import { History, FileText, Download, Search, Clock, User, MessageSquare } from "lucide-react";
+import type { CustomerAssignmentHistoryDto } from "@/features/assignments/assignment.types";
+import { History, Clock, Search, Download } from "lucide-react";
 import { useToast } from "@/shared/ui/components/shared/toast";
-import { assignmentService } from "@/features/assignments/assignment.service";
+import { useAssignmentHistory, useActiveSla } from "@/features/assignments/assignment.hooks";
 import { EmptyState } from "@/shared/ui/components/shared/empty-state";
 
 function FormalHistoryContent() {
   const { addToast } = useToast();
-  const [assignments, setAssignments] = useState<CustomerAssignmentHistoryDto[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const searchParams = useSearchParams();
-  const customerId = searchParams.get("customerId");
+  const router = useRouter();
+  const pathname = usePathname();
+  
+  const customerIdParam = searchParams.get("customerId") || "";
+  const [searchId, setSearchId] = useState(customerIdParam);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(customerIdParam);
 
+  // Sync state if query param changes
   useEffect(() => {
-    if (!customerId) return;
+    setSearchId(customerIdParam);
+    setSelectedCustomerId(customerIdParam);
+  }, [customerIdParam]);
+
+  // Fetch history using React Query hook
+  const { data: assignments = [], isLoading } = useAssignmentHistory(selectedCustomerId || null);
+  
+  // Fetch active SLA leads for quick selection dropdown
+  const { data: activeSlas = [] } = useActiveSla();
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchId.trim()) return;
     
-    const fetchHistory = async () => {
-      setIsLoading(true);
-      try {
-        const data = await assignmentService.getHistory(customerId);
-        setAssignments(data);
-      } catch (error) {
-        console.error("Failed to fetch history:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchHistory();
-  }, [customerId]);
+    // Update URL query params
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("customerId", searchId.trim());
+    router.push(`${pathname}?${params.toString()}`);
+    setSelectedCustomerId(searchId.trim());
+  };
+
+  const handleSelectQuickLead = (val: string) => {
+    setSearchId(val);
+    setSelectedCustomerId(val);
+    const params = new URLSearchParams(searchParams.toString());
+    if (val) {
+      params.set("customerId", val);
+    } else {
+      params.delete("customerId");
+    }
+    router.push(`${pathname}?${params.toString()}`);
+  };
 
   const handleExport = () => {
     addToast({
@@ -103,19 +125,62 @@ function FormalHistoryContent() {
             Tra cứu toàn bộ lịch sử phân công và trạng thái xử lý của khách hàng
           </p>
         </div>
-        <Button variant="outline" onClick={handleExport} className="gap-2">
+        <Button variant="outline" onClick={handleExport} className="gap-2" disabled={!selectedCustomerId}>
           <Download className="h-4 w-4" />
           Xuất dữ liệu (Excel)
         </Button>
       </div>
 
+      {/* Customer Lookup & Quick Select Card */}
+      <Card>
+        <CardContent className="pt-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Direct lookup by Customer ID */}
+            <form onSubmit={handleSearch} className="flex gap-2 items-end">
+              <div className="flex-1 space-y-1">
+                <label className="text-xs font-semibold text-navy-400 uppercase">Tra cứu trực tiếp bằng ID</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-navy-500" />
+                  <Input
+                    placeholder="Nhập mã Khách hàng (Customer ID)..."
+                    className="pl-10"
+                    value={searchId}
+                    onChange={(e) => setSearchId(e.target.value)}
+                  />
+                </div>
+              </div>
+              <Button type="submit">Tìm</Button>
+            </form>
+
+            {/* Quick select dropdown of active SLAs */}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-navy-400 uppercase">Chọn nhanh từ danh sách SLA</label>
+              <select
+                className="w-full h-10 rounded-md border border-navy-700/50 bg-navy-800/50 px-3 py-2 text-sm text-navy-100 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
+                value={selectedCustomerId}
+                onChange={(e) => handleSelectQuickLead(e.target.value)}
+              >
+                <option value="" className="bg-navy-900 text-navy-400">
+                  -- Chọn khách hàng đang chạy SLA --
+                </option>
+                {activeSlas.map((sla) => (
+                  <option key={sla.customerId} value={sla.customerId} className="bg-navy-950 text-navy-100">
+                    {sla.customerName} ({sla.trainingSystem || "Formal"})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Table */}
       <Card>
         <CardContent className="p-4 relative min-h-[300px]">
-          {!customerId ? (
+          {!selectedCustomerId ? (
             <EmptyState
               title="Vui lòng chọn khách hàng"
-              description="Để xem lịch sử giao việc, hãy truyền tham số ?customerId=xxx vào đường dẫn."
+              description="Để xem lịch sử giao việc, hãy chọn khách hàng từ danh sách SLA hoặc nhập Customer ID để tra cứu."
               icon={<Search className="h-8 w-8 text-navy-500" />}
             />
           ) : isLoading ? (
@@ -153,4 +218,5 @@ export default function FormalHistoryPage() {
     </Suspense>
   );
 }
+
 

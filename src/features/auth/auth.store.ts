@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import type { User } from "./auth.types";
 import { setTokenInMemory, clearTokenFromMemory } from "@/shared/api/client";
+import { authService } from "./auth.service";
+import { mapUserDtoToUser } from "./auth.types";
 
 interface AuthState {
   user: User | null;
@@ -58,7 +60,23 @@ export const useAuthStore = create<AuthState>((set) => ({
             token: string;
           };
           setTokenInMemory(token);
-          set({ user, token, isAuthenticated: true, isLoading: false });
+          set({ user, token, isAuthenticated: true, isLoading: true });
+
+          authService
+            .getProfile()
+            .then((profileDto) => {
+              const freshUser = mapUserDtoToUser(profileDto);
+              set({ user: freshUser, token, isAuthenticated: true, isLoading: false });
+
+              try {
+                sessionStorage.setItem("crm_auth", JSON.stringify({ user: freshUser, token }));
+              } catch {
+                // Ignore storage errors and keep in-memory session.
+              }
+            })
+            .catch(() => {
+              set({ user, token, isAuthenticated: true, isLoading: false });
+            });
           return;
         }
       } catch {
